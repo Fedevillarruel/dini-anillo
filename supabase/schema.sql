@@ -12,12 +12,17 @@ create table if not exists public.rings (
   user_id uuid not null references auth.users(id) on delete cascade,
   bluetooth_id text not null,
   bluetooth_name text,
+  color text not null default 'dorado' check (color in ('dorado', 'negro', 'plateado')),
   firmware_version text,
   paired_at timestamptz not null default now(),
   last_connected_at timestamptz,
   created_at timestamptz not null default now(),
   unique (user_id, bluetooth_id)
 );
+
+alter table public.rings
+  add column if not exists color text not null default 'dorado'
+  check (color in ('dorado', 'negro', 'plateado'));
 
 create table if not exists public.device_settings (
   user_id uuid primary key references auth.users(id) on delete cascade,

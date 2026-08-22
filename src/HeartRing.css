@@ -8,6 +8,31 @@
   --black: #000000;
 }
 
+.heart-app .ring-visual { display: grid; place-items: center; transform: none; }
+.ring-image { position: relative; z-index: 1; width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(10px 12px 11px rgba(20, 44, 107, .18)); }
+.ring-visual .ring-body { display: none; }
+.ring-visual .ring-led { z-index: 2; }
+.auth-ring-preview { position: absolute; top: 22px; right: 54px; width: 76px; height: 76px; object-fit: contain; }
+.color-picker { position: relative; width: min(100%, 580px); padding: 31px; border-radius: 10px; background: var(--white); box-shadow: 0 25px 60px rgba(0, 0, 0, .25); }
+.color-picker h2 { margin: 7px 0; color: var(--navy); font-size: 24px; letter-spacing: 0; }
+.color-picker > p:not(.eyebrow) { margin: 0; color: var(--slate); font-size: 12px; line-height: 1.5; }
+.ring-color-options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 22px; }
+.ring-color-options button { display: grid; justify-items: center; gap: 7px; min-height: 142px; padding: 10px; border: 1px solid #dce2e8; border-radius: 7px; color: var(--navy); background: var(--white); font-size: 12px; font-weight: 800; }
+.ring-color-options button:hover { border-color: var(--purple); }
+.ring-color-options button.selected { border: 2px solid var(--pink); background: #fff0f7; color: var(--pink); }
+.ring-color-options img { width: 86px; height: 86px; object-fit: contain; }
+.color-confirm { justify-content: center; width: 100%; margin-top: 20px; }
+
+@media (max-width: 620px) {
+  .heart-app .ring-visual, .heart-app .device-card .ring-visual { transform: none; }
+  .auth-ring-preview { top: 18px; right: 46px; width: 64px; height: 64px; }
+  .color-picker { padding: 27px 20px 22px; }
+  .color-picker h2 { max-width: 270px; font-size: 21px; }
+  .ring-color-options { gap: 7px; }
+  .ring-color-options button { min-height: 125px; padding: 7px 4px; }
+  .ring-color-options img { width: 72px; height: 72px; }
+}
+
 .heart-app {
   min-height: 100svh;
   background: var(--mist);

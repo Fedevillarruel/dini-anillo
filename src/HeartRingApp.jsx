@@ -25,6 +25,9 @@ import { loadHealthDashboard, saveDeviceSettings } from './health-data'
 import { getAuthRedirectTo, signInWithProvider, subscribeToNativeAuth } from './native-auth'
 import { supabase } from './supabase'
 import './HeartRing.css'
+import goldRing from '../fotos/dorado.png'
+import blackRing from '../fotos/negro.png'
+import silverRing from '../fotos/plata.png'
 
 const tabs = [
   { name: 'Inicio', icon: House },
@@ -40,6 +43,12 @@ const metricLabels = {
 }
 
 const emptyDashboard = { ring: null, measurements: [], activity: [], sleep: [], settings: null }
+
+const ringColors = {
+  dorado: { label: 'Dorado', image: goldRing },
+  negro: { label: 'Negro', image: blackRing },
+  plateado: { label: 'Plateado', image: silverRing },
+}
 
 function formatDate(value, includeTime = true) {
   if (!value) return 'Sin registros'
@@ -111,7 +120,7 @@ function MetricCard({ icon: Icon, title, type, measurements }) {
   )
 }
 
-function AuthSheet({ onClose, onAuthenticated }) {
+function AuthSheet({ onClose, onAuthenticated, ringColor }) {
   const [mode, setMode] = useState('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -158,6 +167,7 @@ function AuthSheet({ onClose, onAuthenticated }) {
       <section className="auth-sheet" role="dialog" aria-modal="true" aria-labelledby="auth-title" onMouseDown={(event) => event.stopPropagation()}>
         <button className="icon-button close-button" type="button" onClick={onClose} aria-label="Cerrar acceso"><X size={19} /></button>
         <span className="auth-mark"><Heart size={20} fill="currentColor" /></span>
+        <img className="auth-ring-preview" src={ringColors[ringColor].image} alt={`Anillo ${ringColors[ringColor].label}`} />
         <p className="eyebrow">CUENTA HEART RING</p>
         <h2 id="auth-title">{mode === 'login' ? 'Inicia sesión para vincular' : 'Crea tu cuenta privada'}</h2>
         <p className="auth-copy">Puedes explorar la aplicación sin cuenta. El acceso es necesario para vincular y guardar datos del anillo.</p>
@@ -181,11 +191,27 @@ function AuthSheet({ onClose, onAuthenticated }) {
   )
 }
 
-function RingVisual({ paired, pairing }) {
-  return <div className={`ring-visual ${paired ? 'is-paired' : ''} ${pairing ? 'is-pairing' : ''}`} aria-hidden="true"><span className="ring-led led-one" /><span className="ring-led led-two" /><span className="ring-led led-three" /><div className="ring-body"><span /></div></div>
+function RingVisual({ color = 'dorado', paired, pairing }) {
+  const ring = ringColors[color] ?? ringColors.dorado
+  return <div className={`ring-visual ${paired ? 'is-paired' : ''} ${pairing ? 'is-pairing' : ''}`}><img className="ring-image" src={ring.image} alt={`Anillo ${ring.label}`} /><span className="ring-led led-one" /><span className="ring-led led-two" /><span className="ring-led led-three" /></div>
 }
 
-function HomeView({ session, ring, measurements, activity, sleep, pairing, onPair, openDevice }) {
+function RingColorPicker({ color, onChange, onClose, onConfirm }) {
+  return <div className="auth-backdrop" role="presentation" onMouseDown={onClose}>
+    <section className="color-picker" role="dialog" aria-modal="true" aria-labelledby="ring-color-title" onMouseDown={(event) => event.stopPropagation()}>
+      <button className="icon-button close-button" type="button" onClick={onClose} aria-label="Cerrar selección"><X size={19} /></button>
+      <p className="eyebrow">ANTES DE VINCULAR</p>
+      <h2 id="ring-color-title">¿De qué color es tu anillo?</h2>
+      <p>Elige el acabado para identificarlo correctamente en tu cuenta.</p>
+      <div className="ring-color-options">
+        {Object.entries(ringColors).map(([value, option]) => <button className={color === value ? 'selected' : ''} type="button" key={value} onClick={() => onChange(value)} aria-pressed={color === value}><img src={option.image} alt="" /><span>{option.label}</span></button>)}
+      </div>
+      <button className="primary-button color-confirm" type="button" onClick={onConfirm}><Bluetooth size={17} />Continuar con {ringColors[color].label}</button>
+    </section>
+  </div>
+}
+
+function HomeView({ session, ring, ringColor, measurements, activity, sleep, pairing, onPair, openDevice }) {
   const currentActivity = activity.at(-1)
   const latestSleep = sleep[0]
   return <>
@@ -197,7 +223,7 @@ function HomeView({ session, ring, measurements, activity, sleep, pairing, onPai
           <p>{ring ? 'Tus próximas mediciones aparecerán automáticamente cuando el anillo sincronice.' : session ? 'Inicia el emparejado Bluetooth para guardar tus mediciones en privado.' : 'Puedes conocer todas las secciones. Inicia sesión solo cuando quieras vincular un dispositivo.'}</p>
           <button className="primary-button" type="button" onClick={onPair} disabled={pairing}><Link2 size={17} />{pairing ? 'Buscando dispositivo...' : ring ? 'Vincular otro anillo' : 'Vincular anillo'}</button>
         </div>
-        <RingVisual paired={Boolean(ring)} pairing={pairing} />
+        <RingVisual color={ring?.color ?? ringColor} paired={Boolean(ring)} pairing={pairing} />
       </article>
       <article className="privacy-card"><span className="metric-icon privacy"><ShieldCheck size={19} /></span><p className="eyebrow">DATOS PRIVADOS</p><h2>Solo tuyos.</h2><p>Las lecturas se muestran cuando llegan desde tu anillo y quedan asociadas a tu cuenta.</p><button className="text-button" type="button" onClick={openDevice}>Ver configuración <ChevronRight size={15} /></button></article>
     </section>
@@ -223,9 +249,9 @@ function SettingRow({ icon: Icon, label, description, checked, onChange, disable
   return <div className="setting-row"><span className="setting-icon"><Icon size={18} /></span><div><strong>{label}</strong><p>{description}</p></div><button className={`switch ${checked ? 'on' : ''}`} type="button" onClick={onChange} disabled={disabled} aria-label={`Cambiar ${label}`}><i /></button></div>
 }
 
-function DeviceView({ session, ring, settings, pairing, onPair, onSettingsChange }) {
+function DeviceView({ session, ring, ringColor, settings, pairing, onPair, onSettingsChange }) {
   const activeSettings = settings ?? { heart_rate_interval_minutes: 60, blood_oxygen_interval_minutes: 60, manual_measurements: true }
-  return <><section className="page-intro"><span className="metric-icon bluetooth"><Bluetooth size={19} /></span><div><p className="eyebrow">DISPOSITIVO</p><h2>Heart Ring</h2></div></section><article className="device-card"><RingVisual paired={Boolean(ring)} pairing={pairing} /><div><p className="connection-label">{ring ? 'VINCULADO A TU CUENTA' : 'SIN VINCULAR'}</p><h3>{ring?.bluetooth_name || 'Tu anillo aún no está conectado'}</h3><p>{ring ? `Vinculado el ${formatDate(ring.paired_at)}` : 'Necesitas una cuenta para iniciar el emparejado Bluetooth.'}</p><button className="primary-button" type="button" onClick={onPair} disabled={pairing}><Link2 size={16} />{pairing ? 'Buscando...' : 'Vincular anillo'}</button></div></article><section className="device-specs"><span><Bluetooth size={17} /><strong>Bluetooth 5.0</strong><small>Emparejamiento inalámbrico</small></span><span><BatteryCharging size={17} /><strong>18 mAh</strong><small>Carga magnética, aprox. 1 h</small></span><span><LockKeyhole size={17} /><strong>7 días</strong><small>Conservación rodante</small></span></section><section className="section-heading"><div><h2>Mediciones</h2><p>{session ? 'Guarda estos ajustes en tu cuenta.' : 'Inicia sesión para modificar los ajustes.'}</p></div></section><section className="settings-list"><SettingRow icon={Heart} label="Frecuencia cardiaca automática" description={`Cada ${activeSettings.heart_rate_interval_minutes} minutos`} checked={activeSettings.heart_rate_interval_minutes === 60} disabled={!session} onChange={() => onSettingsChange({ heart_rate_interval_minutes: activeSettings.heart_rate_interval_minutes === 60 ? null : 60 })} /><SettingRow icon={Waves} label="Oxígeno en sangre automático" description={`Cada ${activeSettings.blood_oxygen_interval_minutes} minutos`} checked={activeSettings.blood_oxygen_interval_minutes === 60} disabled={!session} onChange={() => onSettingsChange({ blood_oxygen_interval_minutes: activeSettings.blood_oxygen_interval_minutes === 60 ? null : 60 })} /><SettingRow icon={Settings2} label="Medición manual" description="Disponible desde la aplicación cuando el anillo esté conectado" checked={activeSettings.manual_measurements} disabled={!session} onChange={() => onSettingsChange({ manual_measurements: !activeSettings.manual_measurements })} /><div className="setting-row"><span className="setting-icon"><Moon size={18} /></span><div><strong>Detección de sueño</strong><p>Ventana diaria de 22:00 a 08:00</p></div></div></section></>
+  return <><section className="page-intro"><span className="metric-icon bluetooth"><Bluetooth size={19} /></span><div><p className="eyebrow">DISPOSITIVO</p><h2>Heart Ring</h2></div></section><article className="device-card"><RingVisual color={ring?.color ?? ringColor} paired={Boolean(ring)} pairing={pairing} /><div><p className="connection-label">{ring ? 'VINCULADO A TU CUENTA' : 'SIN VINCULAR'}</p><h3>{ring?.bluetooth_name || 'Tu anillo aún no está conectado'}</h3><p>{ring ? `Vinculado el ${formatDate(ring.paired_at)}` : 'Necesitas una cuenta para iniciar el emparejado Bluetooth.'}</p><button className="primary-button" type="button" onClick={onPair} disabled={pairing}><Link2 size={16} />{pairing ? 'Buscando...' : 'Vincular anillo'}</button></div></article><section className="device-specs"><span><Bluetooth size={17} /><strong>Bluetooth 5.0</strong><small>Emparejamiento inalámbrico</small></span><span><BatteryCharging size={17} /><strong>18 mAh</strong><small>Carga magnética, aprox. 1 h</small></span><span><LockKeyhole size={17} /><strong>7 días</strong><small>Conservación rodante</small></span></section><section className="section-heading"><div><h2>Mediciones</h2><p>{session ? 'Guarda estos ajustes en tu cuenta.' : 'Inicia sesión para modificar los ajustes.'}</p></div></section><section className="settings-list"><SettingRow icon={Heart} label="Frecuencia cardiaca automática" description={`Cada ${activeSettings.heart_rate_interval_minutes} minutos`} checked={activeSettings.heart_rate_interval_minutes === 60} disabled={!session} onChange={() => onSettingsChange({ heart_rate_interval_minutes: activeSettings.heart_rate_interval_minutes === 60 ? null : 60 })} /><SettingRow icon={Waves} label="Oxígeno en sangre automático" description={`Cada ${activeSettings.blood_oxygen_interval_minutes} minutos`} checked={activeSettings.blood_oxygen_interval_minutes === 60} disabled={!session} onChange={() => onSettingsChange({ blood_oxygen_interval_minutes: activeSettings.blood_oxygen_interval_minutes === 60 ? null : 60 })} /><SettingRow icon={Settings2} label="Medición manual" description="Disponible desde la aplicación cuando el anillo esté conectado" checked={activeSettings.manual_measurements} disabled={!session} onChange={() => onSettingsChange({ manual_measurements: !activeSettings.manual_measurements })} /><div className="setting-row"><span className="setting-icon"><Moon size={18} /></span><div><strong>Detección de sueño</strong><p>Ventana diaria de 22:00 a 08:00</p></div></div></section></>
 }
 
 function ProfileView({ session, measurements, onOpenAuth, onSignOut }) {
@@ -238,6 +264,8 @@ function App() {
   const [dashboard, setDashboard] = useState(emptyDashboard)
   const [pairing, setPairing] = useState(false)
   const [showAuth, setShowAuth] = useState(false)
+  const [showColorPicker, setShowColorPicker] = useState(false)
+  const [selectedRingColor, setSelectedRingColor] = useState('dorado')
   const [notice, setNotice] = useState('')
 
   const reloadDashboard = async (userId) => {
@@ -277,12 +305,18 @@ function App() {
     return () => { active = false }
   }, [session?.user?.id])
 
-  const handlePair = async () => {
+  const handlePair = () => {
     setNotice('')
     if (!session) {
       setShowAuth(true)
       return
     }
+    setSelectedRingColor(dashboard.ring?.color ?? 'dorado')
+    setShowColorPicker(true)
+  }
+
+  const connectRing = async () => {
+    setShowColorPicker(false)
     if (!navigator.bluetooth) {
       setNotice('Este navegador no admite Web Bluetooth. Usa Chrome o la compilación móvil con la integración BLE del anillo.')
       return
@@ -290,7 +324,7 @@ function App() {
     setPairing(true)
     try {
       const device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: ['battery_service', 'device_information'] })
-      const { error } = await supabase.from('rings').upsert({ user_id: session.user.id, bluetooth_id: device.id, bluetooth_name: device.name || 'Heart Ring', paired_at: new Date().toISOString() }, { onConflict: 'user_id,bluetooth_id' })
+      const { error } = await supabase.from('rings').upsert({ user_id: session.user.id, bluetooth_id: device.id, bluetooth_name: device.name || 'Heart Ring', color: selectedRingColor, paired_at: new Date().toISOString() }, { onConflict: 'user_id,bluetooth_id' })
       if (error) throw error
       await reloadDashboard(session.user.id)
       setNotice('Anillo vinculado. Las lecturas aparecerán cuando el protocolo del dispositivo las sincronice.')
@@ -317,7 +351,7 @@ function App() {
     setActiveTab('Inicio')
   }
 
-  return <main className="heart-app"><aside className="sidebar"><div className="brand"><span className="brand-symbol"><Heart size={17} fill="currentColor" /></span><span>heart ring</span></div><nav className="side-nav" aria-label="Navegación principal">{tabs.map(({ name, icon: Icon }) => <button className={activeTab === name ? 'active' : ''} key={name} type="button" onClick={() => setActiveTab(name)}><Icon size={18} /><span>{name}</span></button>)}</nav><section className="sidebar-device"><Bluetooth size={16} /><span>{dashboard.ring ? 'Anillo vinculado' : 'Sin anillo vinculado'}</span></section><button className="account-button" type="button" onClick={() => setShowAuth(true)}><span className="avatar">{initials(session?.user)}</span><span>{session?.user?.email || 'Inicia sesión'}</span><ChevronRight size={16} /></button></aside><section className="main-panel"><header className="topbar"><div><p>{new Intl.DateTimeFormat('es-AR', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date())}</p><h1>{activeTab === 'Inicio' ? 'Tu salud, en contexto.' : activeTab}</h1></div><div className="top-actions"><button className="icon-button" type="button" aria-label="Notificaciones"><Bell size={19} /></button><button className="avatar" type="button" onClick={() => setShowAuth(true)} aria-label="Abrir acceso">{initials(session?.user)}</button></div></header>{notice && <div className="notice" role="status"><span>{notice}</span><button type="button" onClick={() => setNotice('')} aria-label="Cerrar aviso"><X size={15} /></button></div>}{activeTab === 'Inicio' && <HomeView session={session} ring={dashboard.ring} measurements={dashboard.measurements} activity={dashboard.activity} sleep={dashboard.sleep} pairing={pairing} onPair={handlePair} openDevice={() => setActiveTab('Anillo')} />}{activeTab === 'Deporte' && <ActivityView activity={dashboard.activity} sleep={dashboard.sleep} />}{activeTab === 'Anillo' && <DeviceView session={session} ring={dashboard.ring} settings={dashboard.settings} pairing={pairing} onPair={handlePair} onSettingsChange={updateSettings} />}{activeTab === 'Perfil' && <ProfileView session={session} measurements={dashboard.measurements} onOpenAuth={() => setShowAuth(true)} onSignOut={signOut} />}</section><nav className="mobile-nav" aria-label="Navegación móvil">{tabs.map(({ name, icon: Icon }) => <button className={activeTab === name ? 'active' : ''} key={name} type="button" onClick={() => setActiveTab(name)}><Icon size={18} /><span>{name}</span></button>)}</nav>{showAuth && <AuthSheet onClose={() => setShowAuth(false)} onAuthenticated={setSession} />}</main>
+  return <main className="heart-app"><aside className="sidebar"><div className="brand"><span className="brand-symbol"><Heart size={17} fill="currentColor" /></span><span>heart ring</span></div><nav className="side-nav" aria-label="Navegación principal">{tabs.map(({ name, icon: Icon }) => <button className={activeTab === name ? 'active' : ''} key={name} type="button" onClick={() => setActiveTab(name)}><Icon size={18} /><span>{name}</span></button>)}</nav><section className="sidebar-device"><Bluetooth size={16} /><span>{dashboard.ring ? 'Anillo vinculado' : 'Sin anillo vinculado'}</span></section><button className="account-button" type="button" onClick={() => setShowAuth(true)}><span className="avatar">{initials(session?.user)}</span><span>{session?.user?.email || 'Inicia sesión'}</span><ChevronRight size={16} /></button></aside><section className="main-panel"><header className="topbar"><div><p>{new Intl.DateTimeFormat('es-AR', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date())}</p><h1>{activeTab === 'Inicio' ? 'Tu salud, en contexto.' : activeTab}</h1></div><div className="top-actions"><button className="icon-button" type="button" aria-label="Notificaciones"><Bell size={19} /></button><button className="avatar" type="button" onClick={() => setShowAuth(true)} aria-label="Abrir acceso">{initials(session?.user)}</button></div></header>{notice && <div className="notice" role="status"><span>{notice}</span><button type="button" onClick={() => setNotice('')} aria-label="Cerrar aviso"><X size={15} /></button></div>}{activeTab === 'Inicio' && <HomeView session={session} ring={dashboard.ring} ringColor={selectedRingColor} measurements={dashboard.measurements} activity={dashboard.activity} sleep={dashboard.sleep} pairing={pairing} onPair={handlePair} openDevice={() => setActiveTab('Anillo')} />}{activeTab === 'Deporte' && <ActivityView activity={dashboard.activity} sleep={dashboard.sleep} />}{activeTab === 'Anillo' && <DeviceView session={session} ring={dashboard.ring} ringColor={selectedRingColor} settings={dashboard.settings} pairing={pairing} onPair={handlePair} onSettingsChange={updateSettings} />}{activeTab === 'Perfil' && <ProfileView session={session} measurements={dashboard.measurements} onOpenAuth={() => setShowAuth(true)} onSignOut={signOut} />}</section><nav className="mobile-nav" aria-label="Navegación móvil">{tabs.map(({ name, icon: Icon }) => <button className={activeTab === name ? 'active' : ''} key={name} type="button" onClick={() => setActiveTab(name)}><Icon size={18} /><span>{name}</span></button>)}</nav>{showAuth && <AuthSheet onClose={() => setShowAuth(false)} onAuthenticated={setSession} ringColor={selectedRingColor} />}{showColorPicker && <RingColorPicker color={selectedRingColor} onChange={setSelectedRingColor} onClose={() => setShowColorPicker(false)} onConfirm={connectRing} />}</main>
 }
 
 export default App
