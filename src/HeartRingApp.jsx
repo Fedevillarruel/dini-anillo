@@ -308,7 +308,7 @@ function BleDevicePicker({ devices, scanning, onClose, onSelect, onRetry }) {
       <button className="icon-button close-button" type="button" onClick={onClose} aria-label="Cerrar búsqueda"><X size={19} /></button>
       <p className="eyebrow">BLUETOOTH CERCANO</p>
       <h2 id="ble-device-title">Selecciona tu anillo</h2>
-      <p>{scanning ? 'Buscando dispositivos Bluetooth cercanos...' : devices.length ? 'El anillo puede aparecer con un nombre distinto o sin nombre.' : 'No se detectaron dispositivos BLE cercanos.'}</p>
+      <p>{scanning ? 'Buscando dispositivos Bluetooth cercanos durante 20 segundos...' : devices.length ? 'El anillo puede aparecer con un nombre distinto o sin nombre.' : 'No se detectaron anuncios BLE. Activa Ubicación, cierra Lefun y apaga el Bluetooth de la Mac antes de reintentar.'}</p>
       <div className="ble-device-list">
         {devices.map((device) => <button key={device.deviceId} type="button" onClick={() => onSelect(device)}><span className="metric-icon bluetooth"><Bluetooth size={17} /></span><span><strong>{device.name || 'Dispositivo BLE sin nombre'}</strong><small>{device.deviceId.slice(-8).toUpperCase()} · {device.rssi ?? '—'} dBm</small></span><ChevronRight size={17} /></button>)}
       </div>

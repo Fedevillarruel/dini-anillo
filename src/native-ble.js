@@ -19,7 +19,7 @@ async function prepareBle() {
   }
 
   if (!initialized) {
-    await BleClient.initialize({ androidNeverForLocation: true })
+    await BleClient.initialize()
     initialized = true
   }
 
@@ -31,10 +31,14 @@ async function prepareBle() {
     }
   }
 
+  if (Capacitor.getPlatform() === 'android' && !(await BleClient.isLocationEnabled())) {
+    throw new Error('Activa Ubicación del teléfono para buscar dispositivos Bluetooth cercanos y vuelve a intentar.')
+  }
+
   return deviceInfo
 }
 
-export async function scanForBleDevices(onResult, duration = 12000) {
+export async function scanForBleDevices(onResult, duration = 20000) {
   await prepareBle()
   const devices = new Map()
 
