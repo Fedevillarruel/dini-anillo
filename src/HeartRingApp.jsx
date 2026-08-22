@@ -23,7 +23,7 @@ import {
   X,
 } from 'lucide-react'
 import { loadHealthDashboard, loadProfile, saveDeviceSettings, saveProfile, saveRing, saveRingHardware, subscribeToHealthUpdates } from './health-data'
-import { inspectExistingRing } from './native-ble'
+import { inspectExistingRing, isNativeBleAvailable } from './native-ble'
 import { getAuthRedirectTo, signInWithProvider, subscribeToNativeAuth } from './native-auth'
 import { supabase } from './supabase'
 import './HeartRing.css'
@@ -446,24 +446,36 @@ function App() {
       }))
       setNotice('Conexión actualizada. Las capacidades del anillo se guardaron correctamente.')
     } catch (error) {
-      if (error.name !== 'NotFoundError') setNotice(`No se pudo actualizar la conexión: ${error.message}`)
+      if (error.name === 'NotFoundError') {
+        setNotice('No se detectó el anillo. Cierra Lefun y cualquier conexión Bluetooth activa, acerca el anillo al teléfono y vuelve a intentar.')
+      } else {
+        setNotice(`No se pudo actualizar la conexión: ${error.message}`)
+      }
     }
   }
 
   const connectRing = async () => {
     setShowColorPicker(false)
-    if (!navigator.bluetooth) {
+    if (!isNativeBleAvailable() && !navigator.bluetooth) {
       setNotice('Este navegador no admite Web Bluetooth. Usa Chrome o la compilación móvil con la integración BLE del anillo.')
       return
     }
     setPairing(true)
     try {
-      const device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: ['battery_service', 'device_information'] })
+      const nativeHardware = isNativeBleAvailable() ? await inspectExistingRing() : null
+      const device = nativeHardware
+        ? { id: nativeHardware.device_id, name: nativeHardware.name }
+        : await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: ['battery_service', 'device_information'] })
       const ringResult = await saveRing(session.user.id, { bluetooth_id: device.id, bluetooth_name: ringModelName, color: selectedRingColor, paired_at: new Date().toISOString() })
+      if (nativeHardware) await saveRingHardware(session.user.id, nativeHardware)
       await reloadDashboard(session.user.id)
       if (!ringResult.colorSaved) setNotice('El anillo quedó vinculado. Actualiza la migración de Supabase para conservar el color elegido.')
     } catch (error) {
-      if (error.name !== 'NotFoundError') setNotice(`No se pudo vincular el anillo: ${error.message}`)
+      if (error.name === 'NotFoundError') {
+        setNotice('No se detectó el anillo. Cierra Lefun y cualquier conexión Bluetooth activa, acerca el anillo al teléfono y vuelve a intentar.')
+      } else {
+        setNotice(`No se pudo vincular el anillo: ${error.message}`)
+      }
     } finally {
       setPairing(false)
     }

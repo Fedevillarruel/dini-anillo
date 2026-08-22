@@ -1,9 +1,11 @@
 import { Capacitor } from '@capacitor/core'
-import { BleClient } from '@capacitor-community/bluetooth-le'
+import { BleClient, ScanMode } from '@capacitor-community/bluetooth-le'
 
 let initialized = false
 
-const standardServices = ['180a', '180d', '1810', '1822', '180f']
+export function isNativeBleAvailable() {
+  return Capacitor.isNativePlatform()
+}
 
 export async function inspectExistingRing() {
   if (!Capacitor.isNativePlatform()) {
@@ -23,9 +25,12 @@ export async function inspectExistingRing() {
     }
   }
 
+  // Do not filter by UUID or advertised name: Lefun-family rings often expose
+  // proprietary services and some advertise without a stable name.
   const device = await BleClient.requestDevice({
-    optionalServices: standardServices,
     displayMode: 'list',
+    scanMode: ScanMode.SCAN_MODE_LOW_LATENCY,
+    allowExtendedAdvertising: true,
   })
 
   await BleClient.connect(device.deviceId)
