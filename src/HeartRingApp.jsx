@@ -22,7 +22,8 @@ import {
   Waves,
   X,
 } from 'lucide-react'
-import { loadHealthDashboard, loadProfile, saveDeviceSettings, saveProfile, saveRing } from './health-data'
+import { loadHealthDashboard, loadProfile, saveDeviceSettings, saveProfile, saveRing, saveRingHardware, subscribeToHealthUpdates } from './health-data'
+import { inspectExistingRing } from './native-ble'
 import { getAuthRedirectTo, signInWithProvider, subscribeToNativeAuth } from './native-auth'
 import { supabase } from './supabase'
 import './HeartRing.css'
@@ -296,7 +297,7 @@ function RingColorPicker({ color, onChange, onClose, onConfirm }) {
   </div>
 }
 
-function HomeView({ session, ring, ringColor, measurements, activity, sleep, pairing, onPair, openDevice }) {
+function HomeView({ session, ring, ringColor, measurements, activity, sleep, pairing, onPair, onInspect = onPair, openDevice }) {
   const currentActivity = activity.at(-1)
   const latestSleep = sleep[0]
   return <>
@@ -305,8 +306,9 @@ function HomeView({ session, ring, ringColor, measurements, activity, sleep, pai
         <div className="status-card-copy">
           <p className="eyebrow">{session ? 'TU DISPOSITIVO' : 'MODO EXPLORACIÓN'}</p>
           <h2>{ring ? 'Anillo vinculado' : session ? 'Vincula tu anillo' : `Explora ${ringModelName}`}</h2>
-          <p>{ring ? 'Tus próximas mediciones aparecerán automáticamente cuando el anillo sincronice.' : session ? 'Inicia el emparejado Bluetooth para guardar tus mediciones en privado.' : 'Puedes conocer todas las secciones. Inicia sesión solo cuando quieras vincular un dispositivo.'}</p>
-          <button className="primary-button" type="button" onClick={onPair} disabled={pairing}><Link2 size={17} />{pairing ? 'Buscando dispositivo...' : ring ? 'Vincular otro anillo' : 'Vincular anillo'}</button>
+          <p>{ring ? 'Tu Dini Ring 1 está vinculado. Las nuevas lecturas se actualizan automáticamente.' : session ? 'Inicia el emparejado Bluetooth para guardar tus mediciones en privado.' : 'Puedes conocer todas las secciones. Inicia sesión solo cuando quieras vincular un dispositivo.'}</p>
+          {!ring && <button className="primary-button" type="button" onClick={onPair} disabled={pairing}><Link2 size={17} />{pairing ? 'Buscando dispositivo...' : 'Vincular anillo'}</button>}
+          {ring && <button className="text-button sync-ring-button" type="button" onClick={onInspect}>Actualizar conexión <ChevronRight size={15} /></button>}
         </div>
         <RingVisual color={ring?.color ?? ringColor} paired={Boolean(ring)} pairing={pairing} />
       </article>
@@ -390,14 +392,52 @@ function App() {
     return () => { active = false }
   }, [session?.user?.id])
 
+  useEffect(() => {
+    if (!session?.user?.id) return undefined
+
+    const refreshMeasurements = async () => {
+      try {
+        const data = await loadHealthDashboard(session.user.id)
+        if (data) setDashboard(data)
+      } catch (error) {
+        setNotice(`No se pudieron actualizar las mediciones: ${error.message}`)
+      }
+    }
+
+    const unsubscribe = subscribeToHealthUpdates(session.user.id, refreshMeasurements)
+    const interval = window.setInterval(refreshMeasurements, 60000)
+
+    return () => {
+      unsubscribe()
+      window.clearInterval(interval)
+    }
+  }, [session?.user?.id])
+
   const handlePair = () => {
     setNotice('')
+    if (dashboard.ring) {
+      void inspectRing()
+      return
+    }
     if (!session) {
       setShowAuth(true)
       return
     }
     setSelectedRingColor(dashboard.ring?.color ?? 'dorado')
     setShowColorPicker(true)
+  }
+
+  const inspectRing = async () => {
+    if (!session || !dashboard.ring) return
+    setNotice('')
+    try {
+      const hardware = await inspectExistingRing()
+      await saveRingHardware(session.user.id, hardware)
+      await reloadDashboard(session.user.id)
+      setNotice('Conexión actualizada. Las capacidades del anillo se guardaron correctamente.')
+    } catch (error) {
+      if (error.name !== 'NotFoundError') setNotice(`No se pudo actualizar la conexión: ${error.message}`)
+    }
   }
 
   const connectRing = async () => {
@@ -411,7 +451,7 @@ function App() {
       const device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: ['battery_service', 'device_information'] })
       const ringResult = await saveRing(session.user.id, { bluetooth_id: device.id, bluetooth_name: ringModelName, color: selectedRingColor, paired_at: new Date().toISOString() })
       await reloadDashboard(session.user.id)
-      setNotice(ringResult.colorSaved ? 'Anillo vinculado. Las lecturas aparecerán cuando el protocolo del dispositivo las sincronice.' : 'Anillo vinculado. Ejecuta la migración de Supabase para guardar el color elegido.')
+      if (!ringResult.colorSaved) setNotice('El anillo quedó vinculado. Actualiza la migración de Supabase para conservar el color elegido.')
     } catch (error) {
       if (error.name !== 'NotFoundError') setNotice(`No se pudo vincular el anillo: ${error.message}`)
     } finally {

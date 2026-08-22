@@ -33,7 +33,7 @@ com.heartring.app://auth/callback
 
 4. En **Authentication > Providers** activa Email, Google y Apple.
 
-Si las tablas se crearon antes de incorporar el color del anillo, ejecuta también [supabase/migrations/20260822_profile_and_ring_color.sql](supabase/migrations/20260822_profile_and_ring_color.sql). Esta migración agrega `rings.color`, datos básicos de perfil y recarga la caché REST de Supabase.
+Si las tablas se crearon antes de incorporar el color del anillo, ejecuta también [supabase/migrations/20260822_profile_and_ring_color.sql](supabase/migrations/20260822_profile_and_ring_color.sql). Esta migración agrega `rings.color`, el perfil de hardware, datos básicos de perfil, la restricción de un anillo por cuenta, las tablas de Realtime y recarga la caché REST de Supabase.
 
 ### Google
 
@@ -84,7 +84,9 @@ Agrega la URL de producción de Vercel en **Authentication > URL Configuration**
 
 ## Bluetooth y datos del anillo
 
-El botón de vinculación pide una sesión y abre el selector Bluetooth del navegador compatible. Al aceptar un dispositivo, guarda su identificador y nombre bajo RLS en `rings`. La lectura de FC, SpO2, presión, pasos y sueño requiere los UUID GATT y el formato de paquetes del firmware Lefun; esos datos no están en la documentación proporcionada y la aplicación no los inventa.
+Cada cuenta admite un único `Dini Ring 1`; una vez vinculado, no se ofrece una segunda vinculación, incluso si el acabado es distinto. La app actualiza FC, presión, SpO2, actividad y sueño en Realtime cuando las nuevas lecturas llegan a Supabase, con una recarga de respaldo cada minuto mientras está abierta.
+
+En Android/iPhone, **Actualizar conexión** explora el anillo ya asociado, registra RSSI, servicios y características GATT en `rings.hardware_profile`, y no crea otro vínculo. El anillo físico debe estar cerca del teléfono para hacer esta exploración. Si anuncia servicios estándar, se podrán usar sus capacidades directamente; si usa UUIDs propietarios Lefun, el perfil guardado permitirá incorporar el decoder exacto. No se generan mediciones ficticias.
 
 ## Verificaciones
 

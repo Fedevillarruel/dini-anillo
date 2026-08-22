@@ -21,6 +21,7 @@ create table if not exists public.rings (
   bluetooth_id text not null,
   bluetooth_name text,
   color text not null default 'dorado' check (color in ('dorado', 'negro', 'plateado')),
+  hardware_profile jsonb not null default '{}'::jsonb,
   firmware_version text,
   paired_at timestamptz not null default now(),
   last_connected_at timestamptz,
@@ -31,6 +32,9 @@ create table if not exists public.rings (
 alter table public.rings
   add column if not exists color text not null default 'dorado'
   check (color in ('dorado', 'negro', 'plateado'));
+
+alter table public.rings
+  add column if not exists hardware_profile jsonb not null default '{}'::jsonb;
 
 create table if not exists public.device_settings (
   user_id uuid primary key references auth.users(id) on delete cascade,
@@ -86,6 +90,7 @@ create table if not exists public.sleep_sessions (
 create index if not exists health_measurements_user_measured_at_idx on public.health_measurements (user_id, measured_at desc);
 create index if not exists activity_daily_user_recorded_on_idx on public.activity_daily (user_id, recorded_on desc);
 create index if not exists sleep_sessions_user_sleep_date_idx on public.sleep_sessions (user_id, sleep_date desc);
+create unique index if not exists rings_one_per_user_idx on public.rings (user_id);
 
 create or replace function public.set_updated_at()
 returns trigger
@@ -153,6 +158,25 @@ drop policy if exists "users manage own sleep" on public.sleep_sessions;
 create policy "users manage own sleep" on public.sleep_sessions for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
 
 grant select, insert, update, delete on public.profiles, public.rings, public.device_settings, public.health_measurements, public.activity_daily, public.sleep_sessions to authenticated;
+
+do $$
+declare
+  table_name text;
+begin
+  foreach table_name in array array['health_measurements', 'activity_daily', 'sleep_sessions', 'rings'] loop
+    if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
+      and not exists (
+        select 1
+        from pg_publication_rel relation
+        join pg_class class on class.oid = relation.prrelid
+        where relation.prpubid = (select oid from pg_publication where pubname = 'supabase_realtime')
+          and class.oid = format('public.%I', table_name)::regclass
+      ) then
+      execute format('alter publication supabase_realtime add table public.%I', table_name);
+    end if;
+  end loop;
+end;
+$$;
 
 create or replace function public.purge_heart_ring_history()
 returns void

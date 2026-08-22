@@ -83,6 +83,17 @@ export async function saveProfile(userId, profile) {
 export async function saveRing(userId, ring) {
   if (!supabase) throw new Error('Supabase no está configurado.')
 
+  const existing = await supabase
+    .from('rings')
+    .select('id, bluetooth_id')
+    .eq('user_id', userId)
+    .maybeSingle()
+
+  if (existing.error) throw existing.error
+  if (existing.data && existing.data.bluetooth_id !== ring.bluetooth_id) {
+    throw new Error('Esta cuenta ya tiene un Dini Ring vinculado.')
+  }
+
   const { error } = await supabase.from('rings').upsert(
     { user_id: userId, ...ring },
     { onConflict: 'user_id,bluetooth_id' },
@@ -102,4 +113,39 @@ export async function saveRing(userId, ring) {
 
   if (retry.error) throw retry.error
   return { colorSaved: false }
+}
+
+export async function saveRingHardware(userId, hardware) {
+  if (!supabase) throw new Error('Supabase no está configurado.')
+
+  const { error } = await supabase
+    .from('rings')
+    .update({ hardware_profile: hardware, last_connected_at: hardware.observed_at })
+    .eq('user_id', userId)
+
+  if (!error) return
+
+  if (!error.message?.includes("'hardware_profile' column")) throw error
+
+  const fallback = await supabase
+    .from('rings')
+    .update({ last_connected_at: hardware.observed_at })
+    .eq('user_id', userId)
+
+  if (fallback.error) throw fallback.error
+}
+
+export function subscribeToHealthUpdates(userId, onChange, onStatus) {
+  if (!supabase || !userId) return () => {}
+
+  const filter = `user_id=eq.${userId}`
+  const channel = supabase
+    .channel(`dini-ring-health-${userId}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'health_measurements', filter }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'activity_daily', filter }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'sleep_sessions', filter }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'rings', filter }, onChange)
+    .subscribe((status) => onStatus?.(status))
+
+  return () => { supabase.removeChannel(channel) }
 }

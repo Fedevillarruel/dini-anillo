@@ -2,6 +2,16 @@
   "appId": "com.heartring.app",
   "appName": "Dini Ring",
   "webDir": "dist",
+  "plugins": {
+    "BluetoothLe": {
+      "displayStrings": {
+        "scanning": "Buscando Dini Ring",
+        "cancel": "Cancelar",
+        "availableDevices": "Dispositivos disponibles",
+        "noDeviceFound": "No se encontró el anillo"
+      }
+    }
+  },
   "server": {
     "androidScheme": "https"
   }

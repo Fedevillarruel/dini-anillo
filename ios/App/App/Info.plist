@@ -24,6 +24,8 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Dini Ring usa Bluetooth para conectar y sincronizar las lecturas de tu anillo.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
