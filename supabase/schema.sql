@@ -3,9 +3,17 @@ create extension if not exists pgcrypto;
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   full_name text,
+  first_name text,
+  last_name text,
+  phone text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.profiles
+  add column if not exists first_name text,
+  add column if not exists last_name text,
+  add column if not exists phone text;
 
 create table if not exists public.rings (
   id uuid primary key default gen_random_uuid(),

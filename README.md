@@ -33,6 +33,8 @@ com.heartring.app://auth/callback
 
 4. En **Authentication > Providers** activa Email, Google y Apple.
 
+Si las tablas se crearon antes de incorporar el color del anillo, ejecuta también [supabase/migrations/20260822_profile_and_ring_color.sql](supabase/migrations/20260822_profile_and_ring_color.sql). Esta migración agrega `rings.color`, datos básicos de perfil y recarga la caché REST de Supabase.
+
 ### Google
 
 En Google Cloud crea un OAuth 2.0 Client ID de tipo Web. La URL de callback autorizada debe ser exactamente:
@@ -69,6 +71,16 @@ npm run ios:open
 ```
 
 Android Studio puede generar el APK/AAB y Xcode el archivo de distribución para App Store. El callback OAuth nativo `com.heartring.app://auth/callback` ya está registrado en Android e iOS. La firma y publicación requieren las cuentas y certificados de Google Play y Apple Developer del propietario.
+
+## Vercel
+
+El proyecto incluye [vercel.json](vercel.json) para construir Vite y resolver rutas de la SPA hacia `index.html`.
+
+1. Importa el repositorio en Vercel.
+2. Añade `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` en **Project Settings > Environment Variables**.
+3. Despliega sin cambiar Build Command ni Output Directory: `vercel.json` define `npm run build` y `dist`.
+
+Agrega la URL de producción de Vercel en **Authentication > URL Configuration** de Supabase para completar OAuth en producción.
 
 ## Bluetooth y datos del anillo
 

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { FcGoogle } from 'react-icons/fc'
 import {
   Activity,
   Apple,
@@ -21,7 +22,7 @@ import {
   Waves,
   X,
 } from 'lucide-react'
-import { loadHealthDashboard, saveDeviceSettings } from './health-data'
+import { loadHealthDashboard, loadProfile, saveDeviceSettings, saveProfile, saveRing } from './health-data'
 import { getAuthRedirectTo, signInWithProvider, subscribeToNativeAuth } from './native-auth'
 import { supabase } from './supabase'
 import './HeartRing.css'
@@ -44,6 +45,7 @@ const metricLabels = {
 }
 
 const emptyDashboard = { ring: null, measurements: [], activity: [], sleep: [], settings: null }
+const ringModelName = 'Dini Ring 1'
 
 const ringColors = {
   dorado: { label: 'Dorado', image: goldRing },
@@ -76,6 +78,10 @@ function initials(user) {
   if (!user) return '?'
   const name = user.user_metadata?.full_name || user.email || '?'
   return name.slice(0, 2).toUpperCase()
+}
+
+function authProvider(user) {
+  return user?.app_metadata?.provider || user?.identities?.[0]?.provider || 'email'
 }
 
 function Chart({ activity }) {
@@ -127,7 +133,27 @@ function AuthSheet({ onClose, onAuthenticated, ringColor }) {
   const [password, setPassword] = useState('')
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
+  const [existingSession, setExistingSession] = useState(null)
+  const [existingProfile, setExistingProfile] = useState(null)
   const redirectTo = getAuthRedirectTo()
+
+  useEffect(() => {
+    if (!supabase) return undefined
+    let active = true
+
+    supabase.auth.getSession().then(async ({ data }) => {
+      if (!active || !data.session) return
+      setExistingSession(data.session)
+      try {
+        const profile = await loadProfile(data.session.user.id)
+        if (active) setExistingProfile(profile)
+      } catch (error) {
+        if (active) setMessage(`No se pudo cargar tu perfil: ${error.message}`)
+      }
+    })
+
+    return () => { active = false }
+  }, [])
 
   const submit = async (event) => {
     event.preventDefault()
@@ -154,13 +180,27 @@ function AuthSheet({ onClose, onAuthenticated, ringColor }) {
 
   const signInWith = async (provider) => {
     if (!supabase) {
-      setMessage('Configura Supabase para activar este proveedor.')
+      setMessage('No se cargaron las variables locales de Supabase. Añade VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY en .env.local y reinicia npm run dev.')
       return
     }
     setBusy(true)
     const { error } = await signInWithProvider(provider)
     setBusy(false)
     if (error) setMessage(error.message)
+  }
+
+  const saveExistingProfile = async (changes) => {
+    await saveProfile(existingSession.user.id, changes)
+    setExistingProfile((profile) => ({ ...profile, ...changes, full_name: [changes.first_name, changes.last_name].filter(Boolean).join(' ') }))
+  }
+
+  const signOut = async () => {
+    await supabase.auth.signOut()
+    onClose()
+  }
+
+  if (existingSession) {
+    return <AccountSheet session={existingSession} profile={existingProfile} onClose={onClose} onSave={saveExistingProfile} onSignOut={signOut} />
   }
 
   return (
@@ -183,13 +223,57 @@ function AuthSheet({ onClose, onAuthenticated, ringColor }) {
         </form>
         <div className="auth-divider"><span>o continúa con</span></div>
         <div className="oauth-stack">
-          <button className="oauth-button" type="button" onClick={() => signInWith('google')} disabled={busy}><span className="google-mark">G</span>Continuar con Google</button>
+          <button className="oauth-button" type="button" onClick={() => signInWith('google')} disabled={busy}><FcGoogle size={18} aria-hidden="true" />Continuar con Google</button>
           <button className="oauth-button apple-button" type="button" onClick={() => signInWith('apple')} disabled={busy}><Apple size={17} />Continuar con Apple</button>
         </div>
         {message && <p className="auth-message" role="status">{message}</p>}
       </section>
     </div>
   )
+}
+
+function AccountSheet({ session, profile, onClose, onSave, onSignOut }) {
+  const provider = authProvider(session.user)
+  const managedByProvider = provider === 'google' || provider === 'apple'
+  const [firstName, setFirstName] = useState(profile?.first_name || session.user.user_metadata?.given_name || '')
+  const [lastName, setLastName] = useState(profile?.last_name || session.user.user_metadata?.family_name || '')
+  const [phone, setPhone] = useState(profile?.phone || session.user.phone || '')
+  const [message, setMessage] = useState('')
+  const [busy, setBusy] = useState(false)
+  const providerLabel = provider === 'google' ? 'Google' : provider === 'apple' ? 'Apple' : 'correo electrónico'
+
+  const submit = async (event) => {
+    event.preventDefault()
+    if (managedByProvider) return
+    setBusy(true)
+    try {
+      await onSave({ first_name: firstName.trim(), last_name: lastName.trim(), phone: phone.trim() })
+      setMessage('Datos guardados.')
+    } catch (error) {
+      setMessage(`No se pudieron guardar los datos: ${error.message}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return <div className="auth-backdrop" role="presentation" onMouseDown={onClose}>
+    <section className="account-sheet" role="dialog" aria-modal="true" aria-labelledby="account-title" onMouseDown={(event) => event.stopPropagation()}>
+      <button className="icon-button close-button" type="button" onClick={onClose} aria-label="Cerrar cuenta"><X size={19} /></button>
+      <span className="profile-avatar account-avatar">{initials(session.user)}</span>
+      <p className="eyebrow">CUENTA CONECTADA</p>
+      <h2 id="account-title">Tu perfil</h2>
+      <p className="account-email">{session.user.email}</p>
+      {managedByProvider && <p className="provider-note">Iniciaste sesión con {providerLabel}. Tus datos se administran desde esa cuenta.</p>}
+      <form onSubmit={submit} className="account-form">
+        <label>Nombre<input value={firstName} onChange={(event) => setFirstName(event.target.value)} disabled={managedByProvider} autoComplete="given-name" /></label>
+        <label>Apellido<input value={lastName} onChange={(event) => setLastName(event.target.value)} disabled={managedByProvider} autoComplete="family-name" /></label>
+        <label>Teléfono<input type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} disabled={managedByProvider} autoComplete="tel" /></label>
+        {!managedByProvider && <button className="primary-button account-save" type="submit" disabled={busy}>{busy ? 'Guardando...' : 'Guardar cambios'}</button>}
+      </form>
+      {message && <p className="auth-message" role="status">{message}</p>}
+      <button className="sign-out-button" type="button" onClick={onSignOut}>Cerrar sesión</button>
+    </section>
+  </div>
 }
 
 function RingVisual({ color = 'dorado', paired, pairing }) {
@@ -220,7 +304,7 @@ function HomeView({ session, ring, ringColor, measurements, activity, sleep, pai
       <article className="ring-status-card">
         <div className="status-card-copy">
           <p className="eyebrow">{session ? 'TU DISPOSITIVO' : 'MODO EXPLORACIÓN'}</p>
-          <h2>{ring ? 'Anillo vinculado' : session ? 'Vincula tu anillo' : 'Explora Heart Ring'}</h2>
+          <h2>{ring ? 'Anillo vinculado' : session ? 'Vincula tu anillo' : `Explora ${ringModelName}`}</h2>
           <p>{ring ? 'Tus próximas mediciones aparecerán automáticamente cuando el anillo sincronice.' : session ? 'Inicia el emparejado Bluetooth para guardar tus mediciones en privado.' : 'Puedes conocer todas las secciones. Inicia sesión solo cuando quieras vincular un dispositivo.'}</p>
           <button className="primary-button" type="button" onClick={onPair} disabled={pairing}><Link2 size={17} />{pairing ? 'Buscando dispositivo...' : ring ? 'Vincular otro anillo' : 'Vincular anillo'}</button>
         </div>
@@ -252,7 +336,7 @@ function SettingRow({ icon: Icon, label, description, checked, onChange, disable
 
 function DeviceView({ session, ring, ringColor, settings, pairing, onPair, onSettingsChange }) {
   const activeSettings = settings ?? { heart_rate_interval_minutes: 60, blood_oxygen_interval_minutes: 60, manual_measurements: true }
-  return <><section className="page-intro"><span className="metric-icon bluetooth"><Bluetooth size={19} /></span><div><p className="eyebrow">DISPOSITIVO</p><h2>Heart Ring</h2></div></section><article className="device-card"><RingVisual color={ring?.color ?? ringColor} paired={Boolean(ring)} pairing={pairing} /><div><p className="connection-label">{ring ? 'VINCULADO A TU CUENTA' : 'SIN VINCULAR'}</p><h3>{ring?.bluetooth_name || 'Tu anillo aún no está conectado'}</h3><p>{ring ? `Vinculado el ${formatDate(ring.paired_at)}` : 'Necesitas una cuenta para iniciar el emparejado Bluetooth.'}</p><button className="primary-button" type="button" onClick={onPair} disabled={pairing}><Link2 size={16} />{pairing ? 'Buscando...' : 'Vincular anillo'}</button></div></article><section className="device-specs"><span><Bluetooth size={17} /><strong>Bluetooth 5.0</strong><small>Emparejamiento inalámbrico</small></span><span><BatteryCharging size={17} /><strong>18 mAh</strong><small>Carga magnética, aprox. 1 h</small></span><span><LockKeyhole size={17} /><strong>7 días</strong><small>Conservación rodante</small></span></section><section className="section-heading"><div><h2>Mediciones</h2><p>{session ? 'Guarda estos ajustes en tu cuenta.' : 'Inicia sesión para modificar los ajustes.'}</p></div></section><section className="settings-list"><SettingRow icon={Heart} label="Frecuencia cardiaca automática" description={`Cada ${activeSettings.heart_rate_interval_minutes} minutos`} checked={activeSettings.heart_rate_interval_minutes === 60} disabled={!session} onChange={() => onSettingsChange({ heart_rate_interval_minutes: activeSettings.heart_rate_interval_minutes === 60 ? null : 60 })} /><SettingRow icon={Waves} label="Oxígeno en sangre automático" description={`Cada ${activeSettings.blood_oxygen_interval_minutes} minutos`} checked={activeSettings.blood_oxygen_interval_minutes === 60} disabled={!session} onChange={() => onSettingsChange({ blood_oxygen_interval_minutes: activeSettings.blood_oxygen_interval_minutes === 60 ? null : 60 })} /><SettingRow icon={Settings2} label="Medición manual" description="Disponible desde la aplicación cuando el anillo esté conectado" checked={activeSettings.manual_measurements} disabled={!session} onChange={() => onSettingsChange({ manual_measurements: !activeSettings.manual_measurements })} /><div className="setting-row"><span className="setting-icon"><Moon size={18} /></span><div><strong>Detección de sueño</strong><p>Ventana diaria de 22:00 a 08:00</p></div></div></section></>
+  return <><section className="page-intro"><span className="metric-icon bluetooth"><Bluetooth size={19} /></span><div><p className="eyebrow">DISPOSITIVO</p><h2>{ringModelName}</h2></div></section><article className="device-card"><RingVisual color={ring?.color ?? ringColor} paired={Boolean(ring)} pairing={pairing} /><div><p className="connection-label">{ring ? 'VINCULADO A TU CUENTA' : 'SIN VINCULAR'}</p><h3>{ring ? ringModelName : 'Tu anillo aún no está conectado'}</h3><p>{ring ? `Vinculado el ${formatDate(ring.paired_at)}` : 'Necesitas una cuenta para iniciar el emparejado Bluetooth.'}</p><button className="primary-button" type="button" onClick={onPair} disabled={pairing}><Link2 size={16} />{pairing ? 'Buscando...' : 'Vincular anillo'}</button></div></article><section className="device-specs"><span><Bluetooth size={17} /><strong>Bluetooth 5.0</strong><small>Emparejamiento inalámbrico</small></span><span><BatteryCharging size={17} /><strong>18 mAh</strong><small>Carga magnética, aprox. 1 h</small></span><span><LockKeyhole size={17} /><strong>7 días</strong><small>Conservación rodante</small></span></section><section className="section-heading"><div><h2>Mediciones</h2><p>{session ? 'Guarda estos ajustes en tu cuenta.' : 'Inicia sesión para modificar los ajustes.'}</p></div></section><section className="settings-list"><SettingRow icon={Heart} label="Frecuencia cardiaca automática" description={`Cada ${activeSettings.heart_rate_interval_minutes} minutos`} checked={activeSettings.heart_rate_interval_minutes === 60} disabled={!session} onChange={() => onSettingsChange({ heart_rate_interval_minutes: activeSettings.heart_rate_interval_minutes === 60 ? null : 60 })} /><SettingRow icon={Waves} label="Oxígeno en sangre automático" description={`Cada ${activeSettings.blood_oxygen_interval_minutes} minutos`} checked={activeSettings.blood_oxygen_interval_minutes === 60} disabled={!session} onChange={() => onSettingsChange({ blood_oxygen_interval_minutes: activeSettings.blood_oxygen_interval_minutes === 60 ? null : 60 })} /><SettingRow icon={Settings2} label="Medición manual" description="Disponible desde la aplicación cuando el anillo esté conectado" checked={activeSettings.manual_measurements} disabled={!session} onChange={() => onSettingsChange({ manual_measurements: !activeSettings.manual_measurements })} /><div className="setting-row"><span className="setting-icon"><Moon size={18} /></span><div><strong>Detección de sueño</strong><p>Ventana diaria de 22:00 a 08:00</p></div></div></section></>
 }
 
 function ProfileView({ session, measurements, onOpenAuth, onSignOut }) {
@@ -325,10 +409,9 @@ function App() {
     setPairing(true)
     try {
       const device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: ['battery_service', 'device_information'] })
-      const { error } = await supabase.from('rings').upsert({ user_id: session.user.id, bluetooth_id: device.id, bluetooth_name: device.name || 'Heart Ring', color: selectedRingColor, paired_at: new Date().toISOString() }, { onConflict: 'user_id,bluetooth_id' })
-      if (error) throw error
+      const ringResult = await saveRing(session.user.id, { bluetooth_id: device.id, bluetooth_name: ringModelName, color: selectedRingColor, paired_at: new Date().toISOString() })
       await reloadDashboard(session.user.id)
-      setNotice('Anillo vinculado. Las lecturas aparecerán cuando el protocolo del dispositivo las sincronice.')
+      setNotice(ringResult.colorSaved ? 'Anillo vinculado. Las lecturas aparecerán cuando el protocolo del dispositivo las sincronice.' : 'Anillo vinculado. Ejecuta la migración de Supabase para guardar el color elegido.')
     } catch (error) {
       if (error.name !== 'NotFoundError') setNotice(`No se pudo vincular el anillo: ${error.message}`)
     } finally {

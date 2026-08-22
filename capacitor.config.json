@@ -1,6 +1,6 @@
 {
   "appId": "com.heartring.app",
-  "appName": "Heart Ring",
+  "appName": "Dini Ring",
   "webDir": "dist",
   "server": {
     "androidScheme": "https"
