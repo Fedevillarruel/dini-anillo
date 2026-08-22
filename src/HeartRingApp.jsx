@@ -23,7 +23,7 @@ import {
   X,
 } from 'lucide-react'
 import { loadHealthDashboard, loadProfile, saveDeviceSettings, saveProfile, saveRing, saveRingHardware, subscribeToHealthUpdates } from './health-data'
-import { inspectExistingRing, isNativeBleAvailable } from './native-ble'
+import { inspectExistingRing, inspectRingDevice, isNativeBleAvailable, scanForBleDevices } from './native-ble'
 import { getAuthRedirectTo, signInWithProvider, subscribeToNativeAuth } from './native-auth'
 import { supabase } from './supabase'
 import './HeartRing.css'
@@ -302,6 +302,21 @@ function RingColorPicker({ color, onChange, onClose, onConfirm }) {
   </div>
 }
 
+function BleDevicePicker({ devices, scanning, onClose, onSelect, onRetry }) {
+  return <div className="auth-backdrop" role="presentation" onMouseDown={onClose}>
+    <section className="ble-device-picker" role="dialog" aria-modal="true" aria-labelledby="ble-device-title" onMouseDown={(event) => event.stopPropagation()}>
+      <button className="icon-button close-button" type="button" onClick={onClose} aria-label="Cerrar búsqueda"><X size={19} /></button>
+      <p className="eyebrow">BLUETOOTH CERCANO</p>
+      <h2 id="ble-device-title">Selecciona tu anillo</h2>
+      <p>{scanning ? 'Buscando dispositivos Bluetooth cercanos...' : devices.length ? 'El anillo puede aparecer con un nombre distinto o sin nombre.' : 'No se detectaron dispositivos BLE cercanos.'}</p>
+      <div className="ble-device-list">
+        {devices.map((device) => <button key={device.deviceId} type="button" onClick={() => onSelect(device)}><span className="metric-icon bluetooth"><Bluetooth size={17} /></span><span><strong>{device.name || 'Dispositivo BLE sin nombre'}</strong><small>{device.deviceId.slice(-8).toUpperCase()} · {device.rssi ?? '—'} dBm</small></span><ChevronRight size={17} /></button>)}
+      </div>
+      {!scanning && <button className="outline-button ble-retry" type="button" onClick={onRetry}>Buscar de nuevo</button>}
+    </section>
+  </div>
+}
+
 function HomeView({ session, ring, ringColor, measurements, activity, sleep, pairing, onPair, onInspect = onPair, openDevice }) {
   const currentActivity = activity.at(-1)
   const latestSleep = sleep[0]
@@ -358,6 +373,9 @@ function App() {
   const [pairing, setPairing] = useState(false)
   const [showAuth, setShowAuth] = useState(false)
   const [showColorPicker, setShowColorPicker] = useState(false)
+  const [showDevicePicker, setShowDevicePicker] = useState(false)
+  const [scanningDevices, setScanningDevices] = useState(false)
+  const [scannedDevices, setScannedDevices] = useState([])
   const [selectedRingColor, setSelectedRingColor] = useState('dorado')
   const [notice, setNotice] = useState('')
 
@@ -454,20 +472,65 @@ function App() {
     }
   }
 
+  const saveNativeRing = async (hardware) => {
+    const ringResult = await saveRing(session.user.id, {
+      bluetooth_id: hardware.device_id,
+      bluetooth_name: ringModelName,
+      color: selectedRingColor,
+      paired_at: new Date().toISOString(),
+    })
+    await saveRingHardware(session.user.id, hardware)
+    await reloadDashboard(session.user.id)
+    setDashboard((current) => ({
+      ...current,
+      ring: { ...current.ring, hardware_profile: hardware, last_connected_at: hardware.observed_at },
+    }))
+    if (!ringResult.colorSaved) setNotice('El anillo quedó vinculado. Actualiza la migración de Supabase para conservar el color elegido.')
+  }
+
+  const scanNativeDevices = async () => {
+    setShowColorPicker(false)
+    setScannedDevices([])
+    setShowDevicePicker(true)
+    setScanningDevices(true)
+    try {
+      const devices = await scanForBleDevices(setScannedDevices)
+      setScannedDevices(devices)
+    } catch (error) {
+      setShowDevicePicker(false)
+      setNotice(error.message)
+    } finally {
+      setScanningDevices(false)
+    }
+  }
+
+  const connectNativeDevice = async (device) => {
+    setShowDevicePicker(false)
+    setPairing(true)
+    try {
+      const hardware = await inspectRingDevice(device)
+      await saveNativeRing(hardware)
+    } catch (error) {
+      setNotice(`No se pudo vincular el anillo: ${error.message}`)
+    } finally {
+      setPairing(false)
+    }
+  }
+
   const connectRing = async () => {
     setShowColorPicker(false)
     if (!isNativeBleAvailable() && !navigator.bluetooth) {
       setNotice('Este navegador no admite Web Bluetooth. Usa Chrome o la compilación móvil con la integración BLE del anillo.')
       return
     }
+    if (isNativeBleAvailable()) {
+      await scanNativeDevices()
+      return
+    }
     setPairing(true)
     try {
-      const nativeHardware = isNativeBleAvailable() ? await inspectExistingRing() : null
-      const device = nativeHardware
-        ? { id: nativeHardware.device_id, name: nativeHardware.name }
-        : await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: ['battery_service', 'device_information'] })
+      const device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: ['battery_service', 'device_information'] })
       const ringResult = await saveRing(session.user.id, { bluetooth_id: device.id, bluetooth_name: ringModelName, color: selectedRingColor, paired_at: new Date().toISOString() })
-      if (nativeHardware) await saveRingHardware(session.user.id, nativeHardware)
       await reloadDashboard(session.user.id)
       if (!ringResult.colorSaved) setNotice('El anillo quedó vinculado. Actualiza la migración de Supabase para conservar el color elegido.')
     } catch (error) {
@@ -497,7 +560,7 @@ function App() {
     setActiveTab('Inicio')
   }
 
-  return <main className="heart-app"><aside className="sidebar"><div className="brand"><span className="brand-symbol"><img src={diniLogo} alt="Dini Ring" /></span><span>Dini Ring</span></div><nav className="side-nav" aria-label="Navegación principal">{tabs.map(({ name, icon: Icon }) => <button className={activeTab === name ? 'active' : ''} key={name} type="button" onClick={() => setActiveTab(name)}><Icon size={18} /><span>{name}</span></button>)}</nav><section className="sidebar-device"><Bluetooth size={16} /><span>{dashboard.ring ? 'Anillo vinculado' : 'Sin anillo vinculado'}</span></section><button className="account-button" type="button" onClick={() => setShowAuth(true)}><span className="avatar">{initials(session?.user)}</span><span>{session?.user?.email || 'Inicia sesión'}</span><ChevronRight size={16} /></button></aside><section className="main-panel"><header className="topbar"><div><p>{new Intl.DateTimeFormat('es-AR', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date())}</p><h1>{activeTab === 'Inicio' ? 'Tu salud, en contexto.' : activeTab}</h1></div><div className="top-actions"><button className="icon-button" type="button" aria-label="Notificaciones"><Bell size={19} /></button><button className="avatar" type="button" onClick={() => setShowAuth(true)} aria-label="Abrir acceso">{initials(session?.user)}</button></div></header>{notice && <div className="notice" role="status"><span>{notice}</span><button type="button" onClick={() => setNotice('')} aria-label="Cerrar aviso"><X size={15} /></button></div>}{activeTab === 'Inicio' && <HomeView session={session} ring={dashboard.ring} ringColor={selectedRingColor} measurements={dashboard.measurements} activity={dashboard.activity} sleep={dashboard.sleep} pairing={pairing} onPair={handlePair} openDevice={() => setActiveTab('Anillo')} />}{activeTab === 'Deporte' && <ActivityView activity={dashboard.activity} sleep={dashboard.sleep} />}{activeTab === 'Anillo' && <DeviceView session={session} ring={dashboard.ring} ringColor={selectedRingColor} settings={dashboard.settings} pairing={pairing} onPair={handlePair} onSettingsChange={updateSettings} />}{activeTab === 'Perfil' && <ProfileView session={session} measurements={dashboard.measurements} onOpenAuth={() => setShowAuth(true)} onSignOut={signOut} />}</section><nav className="mobile-nav" aria-label="Navegación móvil">{tabs.map(({ name, icon: Icon }) => <button className={activeTab === name ? 'active' : ''} key={name} type="button" onClick={() => setActiveTab(name)}><Icon size={18} /><span>{name}</span></button>)}</nav>{showAuth && <AuthSheet onClose={() => setShowAuth(false)} onAuthenticated={setSession} ringColor={selectedRingColor} />}{showColorPicker && <RingColorPicker color={selectedRingColor} onChange={setSelectedRingColor} onClose={() => setShowColorPicker(false)} onConfirm={connectRing} />}</main>
+  return <main className="heart-app"><aside className="sidebar"><div className="brand"><span className="brand-symbol"><img src={diniLogo} alt="Dini Ring" /></span><span>Dini Ring</span></div><nav className="side-nav" aria-label="Navegación principal">{tabs.map(({ name, icon: Icon }) => <button className={activeTab === name ? 'active' : ''} key={name} type="button" onClick={() => setActiveTab(name)}><Icon size={18} /><span>{name}</span></button>)}</nav><section className="sidebar-device"><Bluetooth size={16} /><span>{dashboard.ring ? 'Anillo vinculado' : 'Sin anillo vinculado'}</span></section><button className="account-button" type="button" onClick={() => setShowAuth(true)}><span className="avatar">{initials(session?.user)}</span><span>{session?.user?.email || 'Inicia sesión'}</span><ChevronRight size={16} /></button></aside><section className="main-panel"><header className="topbar"><div><p>{new Intl.DateTimeFormat('es-AR', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date())}</p><h1>{activeTab === 'Inicio' ? 'Tu salud, en contexto.' : activeTab}</h1></div><div className="top-actions"><button className="icon-button" type="button" aria-label="Notificaciones"><Bell size={19} /></button><button className="avatar" type="button" onClick={() => setShowAuth(true)} aria-label="Abrir acceso">{initials(session?.user)}</button></div></header>{notice && <div className="notice" role="status"><span>{notice}</span><button type="button" onClick={() => setNotice('')} aria-label="Cerrar aviso"><X size={15} /></button></div>}{activeTab === 'Inicio' && <HomeView session={session} ring={dashboard.ring} ringColor={selectedRingColor} measurements={dashboard.measurements} activity={dashboard.activity} sleep={dashboard.sleep} pairing={pairing} onPair={handlePair} openDevice={() => setActiveTab('Anillo')} />}{activeTab === 'Deporte' && <ActivityView activity={dashboard.activity} sleep={dashboard.sleep} />}{activeTab === 'Anillo' && <DeviceView session={session} ring={dashboard.ring} ringColor={selectedRingColor} settings={dashboard.settings} pairing={pairing} onPair={handlePair} onSettingsChange={updateSettings} />}{activeTab === 'Perfil' && <ProfileView session={session} measurements={dashboard.measurements} onOpenAuth={() => setShowAuth(true)} onSignOut={signOut} />}</section><nav className="mobile-nav" aria-label="Navegación móvil">{tabs.map(({ name, icon: Icon }) => <button className={activeTab === name ? 'active' : ''} key={name} type="button" onClick={() => setActiveTab(name)}><Icon size={18} /><span>{name}</span></button>)}</nav>{showAuth && <AuthSheet onClose={() => setShowAuth(false)} onAuthenticated={setSession} ringColor={selectedRingColor} />}{showColorPicker && <RingColorPicker color={selectedRingColor} onChange={setSelectedRingColor} onClose={() => setShowColorPicker(false)} onConfirm={connectRing} />}{showDevicePicker && <BleDevicePicker devices={scannedDevices} scanning={scanningDevices} onClose={() => setShowDevicePicker(false)} onSelect={connectNativeDevice} onRetry={scanNativeDevices} />}</main>
 }
 
 export default App

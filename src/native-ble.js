@@ -8,7 +8,7 @@ export function isNativeBleAvailable() {
   return Capacitor.isNativePlatform()
 }
 
-export async function inspectExistingRing() {
+async function prepareBle() {
   if (!Capacitor.isNativePlatform()) {
     throw new Error('La inspección Bluetooth se ejecuta desde la app Android o iPhone.')
   }
@@ -31,13 +31,40 @@ export async function inspectExistingRing() {
     }
   }
 
-  // Do not filter by UUID or advertised name: Lefun-family rings often expose
-  // proprietary services and some advertise without a stable name.
-  const device = await BleClient.requestDevice({
-    displayMode: 'list',
-    scanMode: ScanMode.SCAN_MODE_LOW_LATENCY,
-    allowExtendedAdvertising: true,
-  })
+  return deviceInfo
+}
+
+export async function scanForBleDevices(onResult, duration = 12000) {
+  await prepareBle()
+  const devices = new Map()
+
+  await BleClient.requestLEScan(
+    {
+      allowDuplicates: true,
+      scanMode: ScanMode.SCAN_MODE_LOW_LATENCY,
+      allowExtendedAdvertising: true,
+    },
+    (result) => {
+      const device = {
+        deviceId: result.device.deviceId,
+        name: result.localName || result.device.name || '',
+        rssi: result.rssi ?? null,
+      }
+      devices.set(device.deviceId, device)
+      onResult?.([...devices.values()].sort((first, second) => (second.rssi ?? -999) - (first.rssi ?? -999)))
+    },
+  )
+
+  try {
+    await new Promise((resolve) => window.setTimeout(resolve, duration))
+    return [...devices.values()].sort((first, second) => (second.rssi ?? -999) - (first.rssi ?? -999))
+  } finally {
+    await BleClient.stopLEScan().catch(() => {})
+  }
+}
+
+export async function inspectRingDevice(device) {
+  await prepareBle()
 
   await BleClient.connect(device.deviceId)
   try {
@@ -65,4 +92,14 @@ export async function inspectExistingRing() {
   } finally {
     await BleClient.disconnect(device.deviceId).catch(() => {})
   }
+}
+
+export async function inspectExistingRing() {
+  await prepareBle()
+  const device = await BleClient.requestDevice({
+    displayMode: 'list',
+    scanMode: ScanMode.SCAN_MODE_LOW_LATENCY,
+    allowExtendedAdvertising: true,
+  })
+  return inspectRingDevice(device)
 }
