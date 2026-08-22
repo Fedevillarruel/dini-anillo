@@ -18,8 +18,11 @@ async function prepareBle() {
     throw new Error('El emulador no puede detectar anillos Bluetooth físicos. Instala Dini Ring.apk en un teléfono Android real o ejecútala desde Xcode en un iPhone físico.')
   }
 
+  const usesNearbyDevicesPermission = Capacitor.getPlatform() === 'android'
+    && (deviceInfo.androidSDKVersion ?? 0) >= 31
+
   if (!initialized) {
-    await BleClient.initialize()
+    await BleClient.initialize({ androidNeverForLocation: usesNearbyDevicesPermission })
     initialized = true
   }
 
@@ -31,7 +34,7 @@ async function prepareBle() {
     }
   }
 
-  if (Capacitor.getPlatform() === 'android' && !(await BleClient.isLocationEnabled())) {
+  if (Capacitor.getPlatform() === 'android' && !usesNearbyDevicesPermission && !(await BleClient.isLocationEnabled())) {
     throw new Error('Activa Ubicación del teléfono para buscar dispositivos Bluetooth cercanos y vuelve a intentar.')
   }
 
