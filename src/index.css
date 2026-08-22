@@ -1,0 +1,9 @@
+* { box-sizing: border-box; }
+
+html { background: #f2f5f7; }
+
+body { margin: 0; min-width: 320px; }
+
+button, input { -webkit-tap-highlight-color: transparent; }
+
+button:focus-visible, input:focus-visible { outline: 2px solid #dd2076; outline-offset: 2px; }
