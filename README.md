@@ -72,6 +72,14 @@ npm run ios:open
 
 Android Studio puede generar el APK/AAB y Xcode el archivo de distribución para App Store. El callback OAuth nativo `com.heartring.app://auth/callback` ya está registrado en Android e iOS. La firma y publicación requieren las cuentas y certificados de Google Play y Apple Developer del propietario.
 
+La sesión se conserva mediante almacenamiento nativo en Android/iPhone, incluso después de actualizar la app. Solo se cierra cuando el usuario toca **Cerrar sesión**, desinstala la app o borra sus datos desde los ajustes del sistema.
+
+Para generar el APK debug instalable con el nombre exacto `Dini Ring.apk`:
+
+```bash
+npm run apk:debug
+```
+
 ## Vercel
 
 El proyecto incluye [vercel.json](vercel.json) para construir Vite y resolver rutas de la SPA hacia `index.html`.
