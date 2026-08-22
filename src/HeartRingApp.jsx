@@ -32,10 +32,15 @@ import blackRing from '../fotos/negro.png'
 import silverRing from '../fotos/plata.png'
 import diniLogo from '../fotos/1.png'
 
+function RingTabIcon({ size = 18 }) {
+  const dimension = Math.max(size, 22)
+  return <img className="ring-tab-icon" src={goldRing} alt="" style={{ width: dimension, height: dimension }} />
+}
+
 const tabs = [
   { name: 'Inicio', icon: House },
   { name: 'Deporte', icon: Activity },
-  { name: 'Anillo', icon: Waves },
+  { name: 'Anillo', icon: RingTabIcon },
   { name: 'Perfil', icon: UserRound },
 ]
 
@@ -212,7 +217,7 @@ function AuthSheet({ onClose, onAuthenticated, ringColor }) {
         <img className="auth-ring-preview" src={ringColors[ringColor].image} alt={`Anillo ${ringColors[ringColor].label}`} />
         <p className="eyebrow">DINI RING</p>
         <h2 id="auth-title">{mode === 'login' ? 'Inicia sesión para vincular' : 'Crea tu cuenta privada'}</h2>
-        <p className="auth-copy">Puedes explorar la aplicación sin cuenta. El acceso es necesario para vincular y guardar datos del anillo.</p>
+        <p className="auth-copy">Inicia sesión para vincular tu Dini Ring y proteger tus datos de salud en todos tus dispositivos.</p>
         <div className="auth-switch" role="tablist" aria-label="Tipo de acceso">
           <button className={mode === 'login' ? 'active' : ''} type="button" role="tab" onClick={() => setMode('login')}>Entrar</button>
           <button className={mode === 'register' ? 'active' : ''} type="button" role="tab" onClick={() => setMode('register')}>Crear cuenta</button>
@@ -304,16 +309,17 @@ function HomeView({ session, ring, ringColor, measurements, activity, sleep, pai
     <section className="hero-grid">
       <article className="ring-status-card">
         <div className="status-card-copy">
-          <p className="eyebrow">{session ? 'TU DISPOSITIVO' : 'MODO EXPLORACIÓN'}</p>
-          <h2>{ring ? 'Anillo vinculado' : session ? 'Vincula tu anillo' : `Explora ${ringModelName}`}</h2>
-          <p>{ring ? 'Tu Dini Ring 1 está vinculado. Las nuevas lecturas se actualizan automáticamente.' : session ? 'Inicia el emparejado Bluetooth para guardar tus mediciones en privado.' : 'Puedes conocer todas las secciones. Inicia sesión solo cuando quieras vincular un dispositivo.'}</p>
-          {!ring && <button className="primary-button" type="button" onClick={onPair} disabled={pairing}><Link2 size={17} />{pairing ? 'Buscando dispositivo...' : 'Vincular anillo'}</button>}
+          <p className="eyebrow">{ring ? 'TU DISPOSITIVO' : 'DINI RING 1'}</p>
+          <h2>{ring ? 'Dini Ring 1 conectado' : session ? 'Conecta tu Dini Ring' : 'Tu salud, en un solo lugar'}</h2>
+          <p>{ring ? 'Conectado a tu cuenta. Las nuevas lecturas se actualizan automáticamente.' : session ? 'Vincula tu anillo para registrar tus datos de salud de forma privada.' : 'Inicia sesión para vincular tu anillo y conservar tus datos de salud.'}</p>
+          {!ring && <button className="primary-button" type="button" onClick={onPair} disabled={pairing}><Link2 size={17} />{pairing ? 'Buscando dispositivo...' : session ? 'Vincular Dini Ring' : 'Iniciar sesión'}</button>}
           {ring && <button className="text-button sync-ring-button" type="button" onClick={onInspect}>Actualizar conexión <ChevronRight size={15} /></button>}
         </div>
         <RingVisual color={ring?.color ?? ringColor} paired={Boolean(ring)} pairing={pairing} />
       </article>
       <article className="privacy-card"><span className="metric-icon privacy"><ShieldCheck size={19} /></span><p className="eyebrow">DATOS PRIVADOS</p><h2>Solo tuyos.</h2><p>Las lecturas se muestran cuando llegan desde tu anillo y quedan asociadas a tu cuenta.</p><button className="text-button" type="button" onClick={openDevice}>Ver configuración <ChevronRight size={15} /></button></article>
     </section>
+    {ring?.hardware_profile?.services?.length > 0 && <details className="hardware-diagnostic"><summary>Diagnóstico temporal de hardware</summary><div><span>{ring.hardware_profile.name || ringModelName}</span><span>{ring.hardware_profile.rssi} dBm</span><span>{ring.hardware_profile.services.length} servicios</span></div><code>{ring.hardware_profile.services.map((service) => service.uuid).join(' · ')}</code></details>}
     <section className="section-heading"><div><h2>Salud</h2><p>{session ? 'Lecturas recibidas desde tu dispositivo.' : 'Las lecturas aparecerán aquí cuando conectes tu anillo.'}</p></div></section>
     <section className="metrics-grid"><MetricCard icon={Heart} title="Frecuencia cardiaca" type="heart_rate" measurements={measurements} /><MetricCard icon={Waves} title="Oxígeno en sangre" type="blood_oxygen" measurements={measurements} /><MetricCard icon={Gauge} title="Presión arterial" type="blood_pressure" measurements={measurements} /></section>
     <section className="section-heading"><div><h2>Movimiento</h2><p>Actividad acumulada durante el día.</p></div></section>
@@ -434,6 +440,10 @@ function App() {
       const hardware = await inspectExistingRing()
       await saveRingHardware(session.user.id, hardware)
       await reloadDashboard(session.user.id)
+      setDashboard((current) => ({
+        ...current,
+        ring: { ...current.ring, hardware_profile: hardware, last_connected_at: hardware.observed_at },
+      }))
       setNotice('Conexión actualizada. Las capacidades del anillo se guardaron correctamente.')
     } catch (error) {
       if (error.name !== 'NotFoundError') setNotice(`No se pudo actualizar la conexión: ${error.message}`)
