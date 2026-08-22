@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core'
 import { BleClient, ScanMode } from '@capacitor-community/bluetooth-le'
+import { Device } from '@capacitor/device'
 
 let initialized = false
 
@@ -10,6 +11,11 @@ export function isNativeBleAvailable() {
 export async function inspectExistingRing() {
   if (!Capacitor.isNativePlatform()) {
     throw new Error('La inspección Bluetooth se ejecuta desde la app Android o iPhone.')
+  }
+
+  const deviceInfo = await Device.getInfo()
+  if (deviceInfo.isVirtual) {
+    throw new Error('El emulador no puede detectar anillos Bluetooth físicos. Instala Dini Ring.apk en un teléfono Android real o ejecútala desde Xcode en un iPhone físico.')
   }
 
   if (!initialized) {

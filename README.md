@@ -96,6 +96,8 @@ Cada cuenta admite un único `Dini Ring 1`; una vez vinculado, no se ofrece una 
 
 En Android/iPhone, **Actualizar conexión** explora el anillo ya asociado, registra RSSI, servicios y características GATT en `rings.hardware_profile`, y no crea otro vínculo. El anillo físico debe estar cerca del teléfono para hacer esta exploración. Si anuncia servicios estándar, se podrán usar sus capacidades directamente; si usa UUIDs propietarios Lefun, el perfil guardado permitirá incorporar el decoder exacto. No se generan mediciones ficticias.
 
+El Android Emulator y iOS Simulator no pueden descubrir un anillo BLE físico cercano a la Mac. Para vincularlo, instala `Dini Ring.apk` en un teléfono Android real o ejecuta el proyecto desde Xcode en un iPhone físico. No hace falta emparejarlo primero desde Ajustes Bluetooth: cierra Lefun antes de escanear y permite el acceso Bluetooth solicitado por Dini Ring.
+
 ## Verificaciones
 
 ```bash
