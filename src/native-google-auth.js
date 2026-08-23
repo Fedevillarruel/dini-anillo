@@ -25,9 +25,7 @@ export async function signInWithNativeGoogle() {
 
   const response = await SocialLogin.login({
     provider: 'google',
-    options: {
-      scopes: ['email', 'profile'],
-    },
+    options: {},
   })
   const idToken = response.result.idToken
 
