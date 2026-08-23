@@ -13,6 +13,19 @@ export function isNativeBleAvailable() {
   return Capacitor.isNativePlatform()
 }
 
+export async function requestBlePermissions() {
+  if (!Capacitor.isNativePlatform()) return
+
+  const deviceInfo = await Device.getInfo()
+  const usesNearbyDevicesPermission = Capacitor.getPlatform() === 'android'
+    && (deviceInfo.androidSDKVersion ?? 0) >= 31
+
+  if (!initialized) {
+    await BleClient.initialize({ androidNeverForLocation: usesNearbyDevicesPermission })
+    initialized = true
+  }
+}
+
 async function prepareBle() {
   if (!Capacitor.isNativePlatform()) {
     throw new Error('La inspección Bluetooth se ejecuta desde la app Android o iPhone.')
@@ -26,10 +39,7 @@ async function prepareBle() {
   const usesNearbyDevicesPermission = Capacitor.getPlatform() === 'android'
     && (deviceInfo.androidSDKVersion ?? 0) >= 31
 
-  if (!initialized) {
-    await BleClient.initialize({ androidNeverForLocation: usesNearbyDevicesPermission })
-    initialized = true
-  }
+  await requestBlePermissions()
 
   if (!(await BleClient.isEnabled())) {
     if (Capacitor.getPlatform() === 'android') {

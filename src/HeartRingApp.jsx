@@ -23,7 +23,7 @@ import {
   X,
 } from 'lucide-react'
 import { loadHealthDashboard, loadProfile, saveDeviceSettings, saveProfile, saveRing, saveRingHardware, subscribeToHealthUpdates } from './health-data'
-import { inspectExistingRing, inspectRingDevice, isNativeBleAvailable, scanForBleDevices } from './native-ble'
+import { inspectExistingRing, inspectRingDevice, isNativeBleAvailable, requestBlePermissions, scanForBleDevices } from './native-ble'
 import { getAuthRedirectTo, signInWithProvider, subscribeToNativeAuth } from './native-auth'
 import { supabase } from './supabase'
 import './HeartRing.css'
@@ -379,6 +379,15 @@ function App() {
   const [scannedDevices, setScannedDevices] = useState([])
   const [selectedRingColor, setSelectedRingColor] = useState('dorado')
   const [notice, setNotice] = useState('')
+
+  useEffect(() => {
+    if (!isNativeBleAvailable()) return undefined
+
+    requestBlePermissions().catch((error) => {
+      if (!error.message?.includes('Permission denied')) setNotice(`No se pudo preparar Bluetooth: ${error.message}`)
+    })
+    return undefined
+  }, [])
 
   const reloadDashboard = async (userId) => {
     if (!userId) return
