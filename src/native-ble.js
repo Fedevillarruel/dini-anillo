@@ -114,6 +114,7 @@ export async function inspectRingDevice(device) {
     }
 
     const serviceProfiles = []
+    const notificationTargets = []
 
     for (const service of services) {
       const characteristics = []
@@ -135,8 +136,39 @@ export async function inspectRingDevice(device) {
           write: characteristic.properties.write,
           value_hex: valueHex,
         })
+        if (characteristic.properties.notify || characteristic.properties.indicate) {
+          notificationTargets.push({ service: service.uuid, characteristic: characteristic.uuid })
+        }
       }
       serviceProfiles.push({ uuid: service.uuid, characteristics })
+    }
+
+    const notifications = []
+    for (const target of notificationTargets) {
+      try {
+        await BleClient.startNotifications(
+          device.deviceId,
+          target.service,
+          target.characteristic,
+          (value) => {
+            notifications.push({
+              service: target.service,
+              characteristic: target.characteristic,
+              value_hex: dataViewToHex(value),
+              received_at: new Date().toISOString(),
+            })
+          },
+        )
+      } catch {
+        // Some proprietary characteristics only allow notification after a command.
+      }
+    }
+
+    if (notificationTargets.length) {
+      await new Promise((resolve) => window.setTimeout(resolve, 20000))
+      await Promise.all(notificationTargets.map((target) =>
+        BleClient.stopNotifications(device.deviceId, target.service, target.characteristic).catch(() => {}),
+      ))
     }
 
     return {
@@ -146,6 +178,7 @@ export async function inspectRingDevice(device) {
       battery_level: batteryLevel,
       observed_at: new Date().toISOString(),
       services: serviceProfiles,
+      notifications: notifications.slice(-80),
     }
   } finally {
     await BleClient.disconnect(device.deviceId).catch(() => {})

@@ -363,7 +363,7 @@ function HomeView({ session, ring, ringColor, measurements, activity, sleep, pai
       </article>
       <article className="privacy-card"><span className="metric-icon privacy"><ShieldCheck size={19} /></span><p className="eyebrow">DATOS PRIVADOS</p><h2>Solo tuyos.</h2><p>Las lecturas se muestran cuando llegan desde tu anillo y quedan asociadas a tu cuenta.</p><button className="text-button" type="button" onClick={openDevice}>Ver configuración <ChevronRight size={15} /></button></article>
     </section>
-    {ring?.hardware_profile?.services?.length > 0 && <details className="hardware-diagnostic"><summary>Diagnóstico temporal de hardware</summary><div><span>{ring.hardware_profile.name || ringModelName}</span><span>{ring.hardware_profile.rssi} dBm</span><span>{ring.hardware_profile.services.length} servicios</span></div>{ring.hardware_profile.services.map((service) => <section className="gatt-service" key={service.uuid}><strong>{service.uuid}</strong>{service.characteristics.map((characteristic) => <code key={characteristic.uuid}>{characteristic.uuid} · {characteristic.read ? 'R' : ''}{characteristic.write ? 'W' : ''}{characteristic.notify ? 'N' : ''}{characteristic.indicate ? 'I' : ''}{characteristic.value_hex ? ` · ${characteristic.value_hex}` : ''}</code>)}</section>)}</details>}
+    {ring?.hardware_profile?.services?.length > 0 && <details className="hardware-diagnostic"><summary>Diagnóstico temporal de hardware</summary><div><span>{ring.hardware_profile.name || ringModelName}</span><span>{ring.hardware_profile.rssi} dBm</span><span>{ring.hardware_profile.services.length} servicios</span></div>{ring.hardware_profile.services.map((service) => <section className="gatt-service" key={service.uuid}><strong>{service.uuid}</strong>{service.characteristics.map((characteristic) => <code key={characteristic.uuid}>{characteristic.uuid} · {characteristic.read ? 'R' : ''}{characteristic.write ? 'W' : ''}{characteristic.notify ? 'N' : ''}{characteristic.indicate ? 'I' : ''}{characteristic.value_hex ? ` · ${characteristic.value_hex}` : ''}</code>)}</section>)}<section className="gatt-service"><strong>Notificaciones capturadas ({ring.hardware_profile.notifications?.length || 0})</strong>{ring.hardware_profile.notifications?.map((notification, index) => <code key={`${notification.service}-${notification.characteristic}-${index}`}>{notification.service} / {notification.characteristic} · {notification.value_hex}</code>)}</section></details>}
     <section className="section-heading"><div><h2>Salud</h2><p>{session ? 'Lecturas recibidas desde tu dispositivo.' : 'Las lecturas aparecerán aquí cuando conectes tu anillo.'}</p></div></section>
     <section className="metrics-grid"><MetricCard icon={Heart} title="Frecuencia cardiaca" type="heart_rate" measurements={measurements} /><MetricCard icon={Waves} title="Oxígeno en sangre" type="blood_oxygen" measurements={measurements} /><MetricCard icon={Gauge} title="Presión arterial" type="blood_pressure" measurements={measurements} /></section>
     <section className="section-heading"><div><h2>Movimiento</h2><p>Actividad acumulada durante el día.</p></div></section>
@@ -510,6 +510,7 @@ function App() {
   const inspectRing = async () => {
     if (!session || !dashboard.ring) return
     setNotice('')
+    setPairing(true)
     try {
       const hardware = await inspectExistingRing()
       await saveRingHardware(session.user.id, hardware)
@@ -525,6 +526,8 @@ function App() {
       } else {
         setNotice(`No se pudo actualizar la conexión: ${error.message}`)
       }
+    } finally {
+      setPairing(false)
     }
   }
 
