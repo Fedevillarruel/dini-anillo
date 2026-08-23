@@ -318,21 +318,22 @@ function RingColorPicker({ color, onChange, onClose, onConfirm }) {
 }
 
 function BleDevicePicker({ devices, scanning, onClose, onSelect, onRetry }) {
-  const [showUnnamed, setShowUnnamed] = useState(false)
+  const [showOtherDevices, setShowOtherDevices] = useState(false)
   const namedDevices = devices.filter((device) => device.name)
-  const visibleDevices = showUnnamed ? devices : namedDevices
-  const hasUnnamedDevices = devices.some((device) => !device.name)
+  const ringCandidates = namedDevices.filter((device) => /smart\s*ring/i.test(device.name))
+  const visibleDevices = showOtherDevices ? namedDevices : ringCandidates
+  const otherDeviceCount = namedDevices.length - ringCandidates.length
 
   return <div className="auth-backdrop" role="presentation" onMouseDown={onClose}>
     <section className="ble-device-picker" role="dialog" aria-modal="true" aria-labelledby="ble-device-title" onMouseDown={(event) => event.stopPropagation()}>
       <button className="icon-button close-button" type="button" onClick={onClose} aria-label="Cerrar búsqueda"><X size={19} /></button>
       <p className="eyebrow">BLUETOOTH CERCANO</p>
       <h2 id="ble-device-title">Selecciona tu anillo</h2>
-      <p>{scanning ? 'Buscando dispositivos Bluetooth cercanos durante 20 segundos...' : visibleDevices.length ? 'Selecciona el dispositivo que corresponda a tu anillo.' : devices.length ? 'Solo se detectaron dispositivos sin nombre.' : 'No se detectaron anuncios BLE. Activa Ubicación, cierra Lefun y apaga el Bluetooth de la Mac antes de reintentar.'}</p>
+      <p>{scanning ? 'Buscando Smart Ring durante 20 segundos...' : ringCandidates.length ? 'Selecciona tu Smart Ring.' : devices.length ? 'No se detectó ningún dispositivo llamado Smart Ring.' : 'No se detectaron anuncios BLE. Activa Ubicación, cierra Lefun y apaga el Bluetooth de la Mac antes de reintentar.'}</p>
       <div className="ble-device-list">
         {visibleDevices.map((device) => <button key={device.deviceId} type="button" onClick={() => onSelect(device)}><span className="metric-icon bluetooth"><Bluetooth size={17} /></span><span><strong>{device.name || 'Dispositivo BLE sin nombre'}</strong><small>{device.deviceId.slice(-8).toUpperCase()} · {device.rssi ?? '—'} dBm</small></span><ChevronRight size={17} /></button>)}
       </div>
-      {!scanning && hasUnnamedDevices && <button className="text-button ble-unnamed-toggle" type="button" onClick={() => setShowUnnamed(!showUnnamed)}>{showUnnamed ? 'Ocultar dispositivos sin nombre' : `Mostrar ${devices.length - namedDevices.length} dispositivo${devices.length - namedDevices.length === 1 ? '' : 's'} sin nombre`}</button>}
+      {!scanning && otherDeviceCount > 0 && <button className="text-button ble-unnamed-toggle" type="button" onClick={() => setShowOtherDevices(!showOtherDevices)}>{showOtherDevices ? 'Mostrar solo Smart Ring' : `Ver otros ${otherDeviceCount} dispositivos detectados`}</button>}
       {!scanning && <button className="outline-button ble-retry" type="button" onClick={onRetry}>Buscar de nuevo</button>}
     </section>
   </div>
