@@ -8,6 +8,25 @@
   --black: #000000;
 }
 
+.device-detail-card { margin-bottom: 15px; }
+.device-info-grid { display: grid; grid-template-columns: repeat(4, 1fr); overflow: hidden; border: 1px solid #dce2e8; border-radius: 8px; background: var(--white); }
+.device-info-grid > span { display: grid; gap: 4px; padding: 17px; color: var(--purple); border-right: 1px solid #dce2e8; }
+.device-info-grid > span:last-child { border-right: 0; }
+.device-info-grid strong { color: var(--navy); font-size: 14px; }
+.device-info-grid small { color: var(--slate); font-size: 10px; }
+.ring-info-list { overflow: hidden; border: 1px solid #dce2e8; border-radius: 8px; background: var(--white); }
+.ring-info-list > div { display: flex; justify-content: space-between; gap: 18px; padding: 14px 17px; border-bottom: 1px solid #dce2e8; }
+.ring-info-list > div:last-child { border: 0; }
+.ring-info-list span { color: var(--slate); font-size: 11px; }
+.ring-info-list strong { max-width: 62%; overflow-wrap: anywhere; color: var(--navy); font-size: 11px; text-align: right; }
+.unlink-button { width: 100%; margin-top: 16px; padding: 11px; border: 1px solid #e7c4d6; border-radius: 6px; color: #ae1a5f; background: #fff7fb; font-size: 12px; font-weight: 800; }
+
+@media (max-width: 620px) {
+  .device-info-grid { grid-template-columns: repeat(2, 1fr); }
+  .device-info-grid > span:nth-child(2) { border-right: 0; }
+  .device-info-grid > span:nth-child(-n + 2) { border-bottom: 1px solid #dce2e8; }
+}
+
 .heart-app .ring-visual { display: grid; place-items: center; transform: none; }
 .ring-image { position: relative; z-index: 1; width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(10px 12px 11px rgba(20, 44, 107, .18)); }
 .ring-visual .ring-body { display: none; }

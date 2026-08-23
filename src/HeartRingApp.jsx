@@ -22,7 +22,7 @@ import {
   Waves,
   X,
 } from 'lucide-react'
-import { loadHealthDashboard, loadProfile, saveDeviceSettings, saveProfile, saveRing, saveRingHardware, subscribeToHealthUpdates } from './health-data'
+import { loadHealthDashboard, loadProfile, saveDeviceSettings, saveProfile, saveRing, saveRingHardware, subscribeToHealthUpdates, unlinkRing } from './health-data'
 import { inspectExistingRing, inspectRingDevice, isNativeBleAvailable, requestBlePermissions, scanForBleDevices } from './native-ble'
 import { canUseNativeGoogleSignIn, signInWithNativeGoogle } from './native-google-auth'
 import { getAuthRedirectTo, signInWithProvider, subscribeToNativeAuth } from './native-auth'
@@ -380,6 +380,24 @@ function SettingRow({ icon: Icon, label, description, checked, onChange, disable
 }
 
 function DeviceView({ session, ring, ringColor, settings, pairing, onPair, onSettingsChange }) {
+  const hardware = ring?.hardware_profile || {}
+  const batteryLevel = hardware.battery_level
+  const serviceCount = hardware.services?.length || 0
+
+  const unlink = async () => {
+    if (!session || !ring) return
+    if (!window.confirm('¿Desvincular Dini Ring 1? La cuenta y el historial de salud se conservarán.')) return
+
+    try {
+      await unlinkRing(session.user.id)
+      window.location.reload()
+    } catch (error) {
+      window.alert(`No se pudo desvincular el anillo: ${error.message}`)
+    }
+  }
+
+  return <><section className="page-intro"><span className="metric-icon bluetooth"><Bluetooth size={19} /></span><div><p className="eyebrow">DISPOSITIVO</p><h2>{ring ? 'Dini Ring 1' : 'Dini Ring 1 sin vincular'}</h2></div></section><article className="device-card device-detail-card"><RingVisual color={ring?.color ?? ringColor} paired={Boolean(ring)} pairing={pairing} /><div><p className="connection-label">{ring ? 'VINCULADO A TU CUENTA' : 'SIN VINCULAR'}</p><h3>{ring ? 'Dini Ring 1' : 'Conecta tu anillo'}</h3><p>{ring ? `Vinculado el ${formatDate(ring.paired_at)}` : 'Inicia sesión para vincular tu Dini Ring.'}</p>{ring ? <button className="text-button sync-ring-button" type="button" onClick={onPair}>Actualizar conexión <ChevronRight size={15} /></button> : <button className="primary-button" type="button" onClick={onPair} disabled={pairing}><Link2 size={16} />{pairing ? 'Buscando...' : 'Vincular Dini Ring'}</button>}</div></article>{ring && <><section className="device-info-grid"><span><BatteryCharging size={18} /><strong>{batteryLevel === null || batteryLevel === undefined ? 'No disponible' : `${batteryLevel}%`}</strong><small>Batería del anillo</small></span><span><Bluetooth size={18} /><strong>{hardware.rssi === undefined ? 'No medido' : `${hardware.rssi} dBm`}</strong><small>Señal Bluetooth</small></span><span><Waves size={18} /><strong>{serviceCount || 'No medido'}</strong><small>Servicios detectados</small></span><span><LockKeyhole size={18} /><strong>{ring.bluetooth_id?.slice(-8).toUpperCase() || '—'}</strong><small>Identificador</small></span></section><section className="section-heading"><div><h2>Información técnica</h2><p>Datos obtenidos de la última actualización de conexión.</p></div></section><section className="ring-info-list"><div><span>Color</span><strong>{ringColors[ring.color]?.label || 'Dorado'}</strong></div><div><span>Última conexión</span><strong>{formatDate(ring.last_connected_at || ring.paired_at)}</strong></div><div><span>Firmware</span><strong>{ring.firmware_version || 'No informado por el anillo'}</strong></div><div><span>Servicios GATT</span><strong>{serviceCount ? hardware.services.map((service) => service.uuid).join(' · ') : 'Actualiza conexión para detectar servicios'}</strong></div></section><button className="unlink-button" type="button" onClick={unlink}>Desvincular anillo</button></>}</>
+  // eslint-disable-next-line no-unreachable
   const activeSettings = settings ?? { heart_rate_interval_minutes: 60, blood_oxygen_interval_minutes: 60, manual_measurements: true }
   return <><section className="page-intro"><span className="metric-icon bluetooth"><Bluetooth size={19} /></span><div><p className="eyebrow">DISPOSITIVO</p><h2>{ringModelName}</h2></div></section><article className="device-card"><RingVisual color={ring?.color ?? ringColor} paired={Boolean(ring)} pairing={pairing} /><div><p className="connection-label">{ring ? 'VINCULADO A TU CUENTA' : 'SIN VINCULAR'}</p><h3>{ring ? ringModelName : 'Tu anillo aún no está conectado'}</h3><p>{ring ? `Vinculado el ${formatDate(ring.paired_at)}` : 'Necesitas una cuenta para iniciar el emparejado Bluetooth.'}</p><button className="primary-button" type="button" onClick={onPair} disabled={pairing}><Link2 size={16} />{pairing ? 'Buscando...' : 'Vincular anillo'}</button></div></article><section className="device-specs"><span><Bluetooth size={17} /><strong>Bluetooth 5.0</strong><small>Emparejamiento inalámbrico</small></span><span><BatteryCharging size={17} /><strong>18 mAh</strong><small>Carga magnética, aprox. 1 h</small></span><span><LockKeyhole size={17} /><strong>7 días</strong><small>Conservación rodante</small></span></section><section className="section-heading"><div><h2>Mediciones</h2><p>{session ? 'Guarda estos ajustes en tu cuenta.' : 'Inicia sesión para modificar los ajustes.'}</p></div></section><section className="settings-list"><SettingRow icon={Heart} label="Frecuencia cardiaca automática" description={`Cada ${activeSettings.heart_rate_interval_minutes} minutos`} checked={activeSettings.heart_rate_interval_minutes === 60} disabled={!session} onChange={() => onSettingsChange({ heart_rate_interval_minutes: activeSettings.heart_rate_interval_minutes === 60 ? null : 60 })} /><SettingRow icon={Waves} label="Oxígeno en sangre automático" description={`Cada ${activeSettings.blood_oxygen_interval_minutes} minutos`} checked={activeSettings.blood_oxygen_interval_minutes === 60} disabled={!session} onChange={() => onSettingsChange({ blood_oxygen_interval_minutes: activeSettings.blood_oxygen_interval_minutes === 60 ? null : 60 })} /><SettingRow icon={Settings2} label="Medición manual" description="Disponible desde la aplicación cuando el anillo esté conectado" checked={activeSettings.manual_measurements} disabled={!session} onChange={() => onSettingsChange({ manual_measurements: !activeSettings.manual_measurements })} /><div className="setting-row"><span className="setting-icon"><Moon size={18} /></span><div><strong>Detección de sueño</strong><p>Ventana diaria de 22:00 a 08:00</p></div></div></section></>
 }

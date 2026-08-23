@@ -135,6 +135,17 @@ export async function saveRingHardware(userId, hardware) {
   if (fallback.error) throw fallback.error
 }
 
+export async function unlinkRing(userId) {
+  if (!supabase) throw new Error('Supabase no está configurado.')
+
+  const { error } = await supabase
+    .from('rings')
+    .delete()
+    .eq('user_id', userId)
+
+  if (error) throw error
+}
+
 export function subscribeToHealthUpdates(userId, onChange, onStatus) {
   if (!supabase || !userId) return () => {}
 
