@@ -321,7 +321,13 @@ function BleDevicePicker({ devices, scanning, onClose, onSelect, onRetry }) {
   const [showOtherDevices, setShowOtherDevices] = useState(false)
   const namedDevices = devices.filter((device) => device.name)
   const ringCandidates = namedDevices.filter((device) => /smart\s*ring/i.test(device.name))
-  const visibleDevices = showOtherDevices ? namedDevices : ringCandidates
+  const orderedDevices = [...namedDevices].sort((first, second) => {
+    const firstIsRing = /smart\s*ring/i.test(first.name)
+    const secondIsRing = /smart\s*ring/i.test(second.name)
+    if (firstIsRing !== secondIsRing) return firstIsRing ? -1 : 1
+    return (second.rssi ?? -999) - (first.rssi ?? -999)
+  })
+  const visibleDevices = showOtherDevices || ringCandidates.length ? orderedDevices : namedDevices
   const otherDeviceCount = namedDevices.length - ringCandidates.length
 
   return <div className="auth-backdrop" role="presentation" onMouseDown={onClose}>
@@ -329,11 +335,11 @@ function BleDevicePicker({ devices, scanning, onClose, onSelect, onRetry }) {
       <button className="icon-button close-button" type="button" onClick={onClose} aria-label="Cerrar búsqueda"><X size={19} /></button>
       <p className="eyebrow">BLUETOOTH CERCANO</p>
       <h2 id="ble-device-title">Selecciona tu anillo</h2>
-      <p>{scanning ? 'Buscando Smart Ring durante 20 segundos...' : ringCandidates.length ? 'Selecciona tu Smart Ring.' : devices.length ? 'No se detectó ningún dispositivo llamado Smart Ring.' : 'No se detectaron anuncios BLE. Activa Ubicación, cierra Lefun y apaga el Bluetooth de la Mac antes de reintentar.'}</p>
+      <p>{scanning ? 'Buscando dispositivos Bluetooth cercanos durante 20 segundos...' : visibleDevices.length ? ringCandidates.length ? 'Smart Ring aparece primero. Si no coincide, identifica el anillo por señal.' : 'Acerca y aleja el anillo: el que cambie más su señal es el candidato correcto.' : devices.length ? 'Solo se detectaron dispositivos sin nombre.' : 'No se detectaron anuncios BLE. Activa Ubicación, cierra Lefun y apaga el Bluetooth de la Mac antes de reintentar.'}</p>
       <div className="ble-device-list">
-        {visibleDevices.map((device) => <button key={device.deviceId} type="button" onClick={() => onSelect(device)}><span className="metric-icon bluetooth"><Bluetooth size={17} /></span><span><strong>{device.name || 'Dispositivo BLE sin nombre'}</strong><small>{device.deviceId.slice(-8).toUpperCase()} · {device.rssi ?? '—'} dBm</small></span><ChevronRight size={17} /></button>)}
+        {visibleDevices.map((device) => <button key={device.deviceId} type="button" onClick={() => onSelect(device)}><span className="metric-icon bluetooth"><Bluetooth size={17} /></span><span><strong>{device.name || 'Dispositivo BLE sin nombre'}</strong><small>{/smart\s*ring/i.test(device.name) ? 'Coincidencia de nombre · ' : ''}{device.deviceId.slice(-8).toUpperCase()} · {device.rssi ?? '—'} dBm</small></span><ChevronRight size={17} /></button>)}
       </div>
-      {!scanning && otherDeviceCount > 0 && <button className="text-button ble-unnamed-toggle" type="button" onClick={() => setShowOtherDevices(!showOtherDevices)}>{showOtherDevices ? 'Mostrar solo Smart Ring' : `Ver otros ${otherDeviceCount} dispositivos detectados`}</button>}
+      {!scanning && ringCandidates.length > 0 && otherDeviceCount > 0 && <button className="text-button ble-unnamed-toggle" type="button" onClick={() => setShowOtherDevices(!showOtherDevices)}>{showOtherDevices ? 'Mostrar solo Smart Ring' : `Ver otros ${otherDeviceCount} dispositivos detectados`}</button>}
       {!scanning && <button className="outline-button ble-retry" type="button" onClick={onRetry}>Buscar de nuevo</button>}
     </section>
   </div>
