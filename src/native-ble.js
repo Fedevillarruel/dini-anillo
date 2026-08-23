@@ -9,6 +9,12 @@ function isBluetoothUuid(uuid, shortUuid) {
   return normalized === shortUuid || normalized === `0000${shortUuid}00001000800000805f9b34fb`
 }
 
+function dataViewToHex(value) {
+  return Array.from(new Uint8Array(value.buffer, value.byteOffset, value.byteLength))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join(' ')
+}
+
 export function isNativeBleAvailable() {
   return Capacitor.isNativePlatform()
 }
@@ -107,22 +113,39 @@ export async function inspectRingDevice(device) {
       }
     }
 
+    const serviceProfiles = []
+
+    for (const service of services) {
+      const characteristics = []
+      for (const characteristic of service.characteristics) {
+        let valueHex = null
+        if (characteristic.properties.read) {
+          try {
+            const value = await BleClient.read(device.deviceId, service.uuid, characteristic.uuid)
+            valueHex = dataViewToHex(value)
+          } catch {
+            // Characteristic can require bonding or a proprietary command before reading.
+          }
+        }
+        characteristics.push({
+          uuid: characteristic.uuid,
+          notify: characteristic.properties.notify,
+          indicate: characteristic.properties.indicate,
+          read: characteristic.properties.read,
+          write: characteristic.properties.write,
+          value_hex: valueHex,
+        })
+      }
+      serviceProfiles.push({ uuid: service.uuid, characteristics })
+    }
+
     return {
       device_id: device.deviceId,
       name: device.name || null,
       rssi,
       battery_level: batteryLevel,
       observed_at: new Date().toISOString(),
-      services: services.map((service) => ({
-        uuid: service.uuid,
-        characteristics: service.characteristics.map((characteristic) => ({
-          uuid: characteristic.uuid,
-          notify: characteristic.properties.notify,
-          indicate: characteristic.properties.indicate,
-          read: characteristic.properties.read,
-          write: characteristic.properties.write,
-        })),
-      })),
+      services: serviceProfiles,
     }
   } finally {
     await BleClient.disconnect(device.deviceId).catch(() => {})
