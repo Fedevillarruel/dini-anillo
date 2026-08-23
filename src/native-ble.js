@@ -4,6 +4,11 @@ import { Device } from '@capacitor/device'
 
 let initialized = false
 
+function isBluetoothUuid(uuid, shortUuid) {
+  const normalized = uuid.replaceAll('-', '').toLowerCase()
+  return normalized === shortUuid || normalized === `0000${shortUuid}00001000800000805f9b34fb`
+}
+
 export function isNativeBleAvailable() {
   return Capacitor.isNativePlatform()
 }
@@ -79,11 +84,24 @@ export async function inspectRingDevice(device) {
       BleClient.getServices(device.deviceId),
       BleClient.readRssi(device.deviceId),
     ])
+    const batteryService = services.find((service) => isBluetoothUuid(service.uuid, '180f'))
+    const batteryCharacteristic = batteryService?.characteristics.find((characteristic) => isBluetoothUuid(characteristic.uuid, '2a19'))
+    let batteryLevel = null
+
+    if (batteryService && batteryCharacteristic?.properties.read) {
+      try {
+        const value = await BleClient.read(device.deviceId, batteryService.uuid, batteryCharacteristic.uuid)
+        batteryLevel = value.getUint8(0)
+      } catch {
+        // Some Lefun firmware exposes a proprietary battery characteristic instead.
+      }
+    }
 
     return {
       device_id: device.deviceId,
       name: device.name || null,
       rssi,
+      battery_level: batteryLevel,
       observed_at: new Date().toISOString(),
       services: services.map((service) => ({
         uuid: service.uuid,

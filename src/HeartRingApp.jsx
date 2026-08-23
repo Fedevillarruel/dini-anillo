@@ -327,6 +327,7 @@ function HomeView({ session, ring, ringColor, measurements, activity, sleep, pai
           <p className="eyebrow">{ring ? 'TU DISPOSITIVO' : 'DINI RING 1'}</p>
           <h2>{ring ? 'Dini Ring 1 conectado' : session ? 'Conecta tu Dini Ring' : 'Tu salud, en un solo lugar'}</h2>
           <p>{ring ? 'Conectado a tu cuenta. Las nuevas lecturas se actualizan automáticamente.' : session ? 'Vincula tu anillo para registrar tus datos de salud de forma privada.' : 'Inicia sesión para vincular tu anillo y conservar tus datos de salud.'}</p>
+          {ring && <span className="ring-battery-status"><BatteryCharging size={15} />{ring.hardware_profile?.battery_level === null || ring.hardware_profile?.battery_level === undefined ? 'Batería disponible al actualizar conexión' : `${ring.hardware_profile.battery_level}% de batería`}</span>}
           {!ring && <button className="primary-button" type="button" onClick={onPair} disabled={pairing}><Link2 size={17} />{pairing ? 'Buscando dispositivo...' : session ? 'Vincular Dini Ring' : 'Iniciar sesión'}</button>}
           {ring && <button className="text-button sync-ring-button" type="button" onClick={onInspect}>Actualizar conexión <ChevronRight size={15} /></button>}
         </div>
@@ -462,7 +463,7 @@ function App() {
         ...current,
         ring: { ...current.ring, hardware_profile: hardware, last_connected_at: hardware.observed_at },
       }))
-      setNotice('Conexión actualizada. Las capacidades del anillo se guardaron correctamente.')
+      setNotice(hardware.battery_level === null ? 'Conexión actualizada. El anillo no expone el nivel de batería estándar.' : `Conexión actualizada. Batería: ${hardware.battery_level}%.`)
     } catch (error) {
       if (error.name === 'NotFoundError') {
         setNotice('No se detectó el anillo. Cierra Lefun y cualquier conexión Bluetooth activa, acerca el anillo al teléfono y vuelve a intentar.')
