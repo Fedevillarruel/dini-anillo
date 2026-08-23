@@ -24,6 +24,7 @@ import {
 } from 'lucide-react'
 import { loadHealthDashboard, loadProfile, saveDeviceSettings, saveProfile, saveRing, saveRingHardware, subscribeToHealthUpdates } from './health-data'
 import { inspectExistingRing, inspectRingDevice, isNativeBleAvailable, requestBlePermissions, scanForBleDevices } from './native-ble'
+import { canUseNativeGoogleSignIn, signInWithNativeGoogle } from './native-google-auth'
 import { getAuthRedirectTo, signInWithProvider, subscribeToNativeAuth } from './native-auth'
 import { supabase } from './supabase'
 import './HeartRing.css'
@@ -190,9 +191,23 @@ function AuthSheet({ onClose, onAuthenticated, ringColor }) {
       return
     }
     setBusy(true)
-    const { error } = await signInWithProvider(provider)
-    setBusy(false)
-    if (error) setMessage(error.message)
+    try {
+      if (provider === 'google' && canUseNativeGoogleSignIn()) {
+        const session = await signInWithNativeGoogle()
+        if (session) {
+          onAuthenticated(session)
+          onClose()
+        }
+        return
+      }
+
+      const { error } = await signInWithProvider(provider)
+      if (error) setMessage(error.message)
+    } catch (error) {
+      setMessage(error.message)
+    } finally {
+      setBusy(false)
+    }
   }
 
   const saveExistingProfile = async (changes) => {

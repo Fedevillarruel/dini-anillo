@@ -45,6 +45,15 @@ https://TU_PROJECT_REF.supabase.co/auth/v1/callback
 
 Copia el Client ID y Client Secret en el proveedor Google de Supabase. Los orígenes locales se configuran en Supabase como Redirect URLs, no como callback de Google.
 
+Para Google Sign-In nativo de Android, crea además un OAuth Client de tipo **Android** en el mismo proyecto de Google Cloud y registra:
+
+```text
+Package name: com.heartring.app
+SHA-1 debug: D5:BD:DA:78:57:FC:8B:31:A0:F6:C1:F3:64:6C:53:BB:BB:36:64:86
+```
+
+El Client ID web ya se usa como audiencia del token en la app. El Client Android no se coloca en el código. Si Google Cloud muestra el error `Developer console is not set up correctly`, verifica exactamente ese package y SHA-1, y agrega la cuenta de prueba en la pantalla de consentimiento de Google si el proyecto está en Testing.
+
 ### Apple
 
 En Apple Developer configura un Services ID con Sign in with Apple y usa esta Return URL:
